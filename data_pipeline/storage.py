@@ -273,8 +273,9 @@ class EventRecord:
         assert _ts_array.shape[0] == _duration_array.shape[0], f"Timestamps and Duration arrays should have the same size, got {_ts_array.shape} and {_duration_array.shape}"
 
         # Fill values
-        data = TimeSeries()
+        data = TimeSeries()      
         data[t0] = 0 if start_value is None else start_value
+        self.start_time = t0
 
         # Check for empty arrays
         if _ts_array.size == 0:
