@@ -148,3 +148,5 @@ cython_debug/
 *.rec
 *.mat
 *.bin
+
+test.py
