@@ -306,7 +306,7 @@ class EventRecord:
         Returns:
             np.ndarray: [description]
         """
-        values = [y for _,y in self.data.sample(sampling_period=sampling_period)]
+        values = [y for _,y in self.data.sample(sampling_period=sampling_period)] if self.data.n_measurements()>1 else []
         return Signal(label = self.label, data = np.array(values), fs = 1/sampling_period, start_time=self.start_time)
 
 class EventFrame(dict):
@@ -385,6 +385,17 @@ class EventFrame(dict):
         else:
             return record
 
+    def n_events(self) -> int:
+        """Return the total number of respiratory events
+
+        Returns:
+            int: Total number of events
+        """
+        output = 0
+        for x in self.values():
+            output += x.data.n_measurements()
+
+        return output
     # Labels property
     @property
     def labels(self):
