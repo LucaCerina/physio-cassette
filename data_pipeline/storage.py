@@ -254,7 +254,7 @@ class EventRecord:
     start_value: Any = None
 
     def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray], is_binary:bool=False, start_value:Any=None):
-        """Generate a EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have bianry values and a start_value
+        """Generate a EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have binary values and a start_value
 
         Args:
             label (str): label of the data instance
@@ -296,6 +296,23 @@ class EventRecord:
                 data[t_end] = 0
 
         return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
+
+    def from_csv(self, filename:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=','):
+        # Fill values
+        data = TimeSeries()      
+        self.start_time = t0
+
+        # data[t0] = 0 if start_value is None else start_value
+        if ts_column is None and ts_sampling == 0:
+            raise(ValueError, "if ts_column is None a valid ts_sampling in seconds should be passed to the function")
+
+        with open(filename, 'r') as csv_file:
+            reader = csv.DictReader(csv_file, delimiter=delimiter)
+            for row in reader:
+                value = row[event_column]
+                ts = datetime.fromisoformat(row[ts_column]) if ts_is_datetime else timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
+                data[ts] = value
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)    
 
     def as_array(self, sampling_period:float) -> Signal:
         """Return data as a regularly sampled array
