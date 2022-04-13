@@ -253,6 +253,15 @@ class EventRecord:
     is_binary: bool = False
     start_value: Any = None
 
+    def __len__(self):
+        """Override __len__ to return the number of events.
+        First 'non-event' is subtracted. Start and end of event are considered together, so divided by 2
+
+        Returns:
+            int: Number of events
+        """
+        return (self.data.n_measurements()-1)//2
+
     def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray], is_binary:bool=False, start_value:Any=None):
         """Generate a EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have binary values and a start_value
 
