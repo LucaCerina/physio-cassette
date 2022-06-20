@@ -1,4 +1,5 @@
 import csv
+from logging import warning
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -70,9 +71,13 @@ class Signal:
         # TODO add assert for non mat files
         if os.environ['userdomain'] != 'CODE1' and label in ***REMOVED***_DATA_SUBSET: # Gatekeep for ***REMOVED*** data
             return None, label
-        raw_mat = read_mat(mat_filename, variable_names=['data', 'SampleRate', 'StartDate', 'StartTime'])
-        assert 'StartDate' in raw_mat.keys(), "ValueError: StartDate missing in Mat data file"
-        assert 'StartTime' in raw_mat.keys(), "ValueError: StartTime missing in Mat data file"
+        try:
+            raw_mat = read_mat(mat_filename, variable_names=['data', 'SampleRate', 'StartDate', 'StartTime'])
+            assert 'StartDate' in raw_mat.keys(), "StartDate missing in Mat data file"
+            assert 'StartTime' in raw_mat.keys(), "StartTime missing in Mat data file"
+        except (ValueError, AssertionError) as e:
+            warning(f"{e} {mat_filename}")
+            return None, label
         start_time = datetime.strptime(f"{raw_mat['StartDate']}-{raw_mat['StartTime']}", "%d/%m/%Y-%H:%M:%S")
         return Signal(label=label, data=raw_mat['data'], fs=raw_mat['SampleRate'], start_time=start_time), label
 
@@ -158,7 +163,7 @@ class SignalFrame(dict):
 
         Args:
             folder (str): name of the folder
-            signal_names (Union[str,list], optional): restrict loading to certain signals only, otherwise load everything. Defaults to None.
+            signal_names (Union[str,list], optional): restrict loading to certain signals only, otherwise load everything. Defaults to everything.
 
         Returns:
             [self]: initialized SignalFrame
@@ -166,11 +171,13 @@ class SignalFrame(dict):
         self.__init__()
         filenames = glob(folder+'/*.mat')
         for filename in filenames:
-            signal, label = Signal().from_mat_file(mat_filename=filename)
-            if signal and ((signal_names is None) or (label in signal_names)):
-                self[label] = signal
-                if self.start_date is None: # TODO assumption that all signals in the folder will have the same start time
-                    self.start_date = signal.start_time
+            label = Path(filename).stem
+            if (signal_names is None) or (label in signal_names):
+                signal, label = Signal().from_mat_file(mat_filename=filename)
+                if signal:
+                    self[label] = signal
+                    if self.start_date is None: # TODO assumption that all signals in the folder will have the same start time
+                        self.start_date = signal.start_time
         return self
 
     # Labels property
