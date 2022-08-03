@@ -1,15 +1,18 @@
 import csv
-from logging import warning
+import inspect
 import os
+import pickle
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from glob import glob
+from logging import warning
 from pathlib import Path
-from typing import Any, Iterable, Tuple, Union
+from typing import Any, Callable, Iterable, Tuple, Union
 
 import numpy as np
 import pyedflib as edf
 from pymatreader import read_mat
+from scipy.io import savemat
 from traces import TimeSeries
 
 # A list of signals not to be loaded on TU/e laptops
@@ -18,6 +21,7 @@ from traces import TimeSeries
 @dataclass
 class Signal:
     """A class that holds any signal recorded from a sensor
+    TODO changes in data or fs may not be reflected in tstamps
 
     Class Attributes:
         label: str
@@ -32,6 +36,8 @@ class Signal:
     Attributes:
         time: np.ndarray(datetime)
             time instants of each sample
+        shape: Tuple(int)
+            shape of the data array
     """
     label: str = ''
     data: np.ndarray = None
@@ -438,3 +444,61 @@ class EventFrame(dict):
             [list]: label of all Signals in the EventFrame
         """
         return [*self]
+
+def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='pickle', force:bool=False) -> Any:
+    """Minimal wrapper to automatically manage cache of functions. Currently support pickle and matlab formats.
+       BEWARE! Not all data formats may be supported correctly.
+       Example call --> autocache(foo, 'test', 'test')(args)
+
+    Args:
+        func (Callable): function to be called.
+        cache_folder (str): path to the cache folder.
+        filename (str): filename of the cached data.
+        cache_format (str, optional): Select which serialization format is used. Currently support 'pickle' and 'matlab'. Defaults to 'pickle'.
+        force (bool, optional): Force the fucntion to be executed even if cache exists. Defaults to False.
+
+    Returns:
+        Any: return of function 'func' with the same format
+    """
+    # File extensions
+    file_extension = {
+        'pickle': 'pkl',
+        'matlab': 'mat'
+    }
+    # Function wrapper
+    def wrap(*args, **kwargs):
+        # Assert cache format
+        assert cache_format in ['pickle', 'matlab'], "Invalid cache format. Valid options are 'pickle' or 'matlab'"
+
+        # Get function doc for later interpretability
+        func_doc = inspect.getdoc(func)
+
+        # Check if folder exists or create it
+        if not Path(cache_folder).exists():
+            Path(cache_folder).mkdir()
+
+        # Read data if not forced to call the function
+        filepath = f"{cache_folder}/{filename}.{file_extension[cache_format]}"
+        if (not force) and Path(filepath).exists():
+            if cache_format == 'pickle':
+                with open(filepath, "rb") as openfile:
+                    data = pickle.load(openfile)['data']
+            elif cache_format == 'matlab':
+                data = read_mat(filepath)['data']
+
+            # No transformation on data if the information is not available
+            return data
+
+        # Call function
+        output = func(*args, **kwargs)
+
+        # Save data in cache
+        save_obj = {'data': output, 'doc':func_doc}
+        if cache_format == 'pickle':
+            with open(filepath, "wb") as openfile:
+                pickle.dump(save_obj, openfile, protocol=pickle.HIGHEST_PROTOCOL)
+        elif cache_format == 'matlab':
+            savemat(filepath, save_obj)
+        return output
+
+    return wrap
