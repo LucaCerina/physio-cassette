@@ -18,7 +18,7 @@ from traces import TimeSeries
 # A list of signals not to be loaded on TU/e laptops
 ***REMOVED***_DATA_SUBSET = ['TBD'] #TODO fill this
 
-@dataclass
+@dataclass(repr=False)
 class Signal:
     """A class that holds any signal recorded from a sensor
     TODO changes in data or fs may not be reflected in tstamps
@@ -45,6 +45,21 @@ class Signal:
     start_time: datetime = datetime.fromtimestamp(0)
     tstamps: np.ndarray = None
 
+    def __post_init__(self):
+        self.data = np.array(self.data) if self.data is not None else None
+        self.tstamps = np.array(self.tstamps) if self.tstamps is not None else None
+
+    def __setitem__(self, indexes:slice, values:np.ndarray):
+        """Update values of a slice of the Signal
+
+        Args:
+            indexes (slice): example sig[1:1000]
+            values (np.ndarray): new values
+        """
+        assert isinstance(indexes, slice)
+        assert isinstance(values, np.ndarray)
+        self.data[indexes] = values
+
     def __getitem__(self, indexes):
         """Return a slice of self as a Signal object
 
@@ -60,6 +75,9 @@ class Signal:
             fs=self.fs,
             start_time=self.start_time, 
             tstamps=self.tstamps[indexes] if self.tstamps is not None else self.tstamps)
+
+    def __array__(self, dtype=None):
+        return self.data
 
     def from_mat_file(self, mat_filename:str) -> Tuple[Any, str]:
         """Load a Signal from  NOPEformatted matlab file
@@ -94,7 +112,7 @@ class Signal:
         Returns:
             [np.ndarray]: time instants of each sample
         """
-        if self.tstamps is None:
+        if self.tstamps is None or self.tstamps.shape[0] != self.data.shape[0]:
             if not np.isnan(self.fs):
                 steps = np.linspace(0, self.data.shape[0]/self.fs, self.data.shape[0])
                 tsteps = [self.start_time + timedelta(seconds=x) for x in steps]
@@ -348,6 +366,15 @@ class EventRecord:
         values = [y for _,y in self.data.sample(sampling_period=sampling_period)] if self.data.n_measurements()>1 else []
         return Signal(label = self.label, data = np.array(values), fs = 1/sampling_period, start_time=self.start_time)
 
+    @property
+    def n_events(self) -> int:
+        """Return the total number of respiratory events
+
+        Returns:
+            int: Total number of events
+        """
+        return self.data.n_measurements()
+
 class EventFrame(dict):
     """A class to hold various EventRecord together
     
@@ -423,7 +450,7 @@ class EventFrame(dict):
             return record.as_array(sampling_period)
         else:
             return record
-
+    @property
     def n_events(self) -> int:
         """Return the total number of respiratory events
 
@@ -432,9 +459,10 @@ class EventFrame(dict):
         """
         output = 0
         for x in self.values():
-            output += x.data.n_measurements()
+            output += x.n_events
 
         return output
+
     # Labels property
     @property
     def labels(self):
