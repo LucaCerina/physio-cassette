@@ -2,12 +2,13 @@ import csv
 import inspect
 import os
 import pickle
+import warnings
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from glob import glob
 from logging import warning
 from pathlib import Path
-from typing import Any, Callable, Iterable, Tuple, Union
+from typing import Any, Callable, Iterable, List, Tuple, Union
 
 import numpy as np
 import pyedflib as edf
@@ -286,12 +287,25 @@ class EventRecord:
 
     def __len__(self):
         """Override __len__ to return the number of events.
-        First 'non-event' is subtracted. Start and end of event are considered together, so divided by 2
+        In binary series first 'non-event' is subtracted. Start and end of event (state transitions) are considered together, so divided by 2
+        In non binary series returns number of measurements.
 
         Returns:
             int: Number of events
         """
-        return (self.data.n_measurements()-1)//2
+        return (self.data.n_measurements()-1)//2 if self.is_binary else self.data.n_measurements()
+
+    def __getitem__(self, indexes):
+        if indexes.start==indexes.stop==indexes.step==None:
+            return self
+
+        if isinstance(indexes.start, int) or isinstance(indexes.stop, int):
+            tstart = self.data.get_item_by_index(indexes.start)[0] if indexes.start is not None else self.data.first_key()
+            tend =  self.data.get_item_by_index(indexes.stop)[0] if indexes.stop is not None else self.data.last_key()
+        else:
+            tstart = indexes.start if indexes.start is not None else self.data.first_key()
+            tend = indexes.stop if indexes.stop is not None else self.data.last_key()
+        return EventRecord(label=self.label, start_time=tstart, data=self.data.slice(tstart, tend), is_binary=self.is_binary, start_value=self.start_value)
 
     def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray], is_binary:bool=False, start_value:Any=None):
         """Generate a EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have binary values and a start_value
@@ -350,7 +364,7 @@ class EventRecord:
             reader = csv.DictReader(csv_file, delimiter=delimiter)
             for row in reader:
                 value = row[event_column]
-                ts = datetime.fromisoformat(row[ts_column]) if ts_is_datetime else timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
+                ts = datetime.fromisoformat(row[ts_column]) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
                 data[ts] = value
         return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)    
 
@@ -366,14 +380,24 @@ class EventRecord:
         values = [y for _,y in self.data.sample(sampling_period=sampling_period)] if self.data.n_measurements()>1 else []
         return Signal(label = self.label, data = np.array(values), fs = 1/sampling_period, start_time=self.start_time)
 
+    def remap(self, map:Union[dict, Callable]) -> None:
+        """Update values of events inplace with a dictionary mapping or a function
+
+        Args:
+            map (Union[dict, Callable]): Mapping dictionary or Callable/lambda
+
+        """
+        assert isinstance(map, dict) or isinstance(map, Callable), "Mapping should be a dict or a function"
+        if isinstance(map, dict):
+            for t, val in self.data:
+                new_val = map[val]
+                self.data[t] = new_val
+        else:
+            self.data = self.data.operation(None, lambda x,y: map(x))
+
     @property
     def n_events(self) -> int:
-        """Return the total number of respiratory events
-
-        Returns:
-            int: Total number of events
-        """
-        return self.data.n_measurements()
+        return len(self)
 
 class EventFrame(dict):
     """A class to hold various EventRecord together
@@ -428,11 +452,12 @@ class EventFrame(dict):
             self[key] = EventRecord().from_ts_dur_array(label=key, t0=self.start_date, ts_array=data['ts'], duration_array=data['dur'], is_binary=True)
         return self
 
-    def merged_data(self, label:str='merged events', as_signal:bool=False, sampling_period:float=1.0) -> Union[EventRecord, Signal]:
+    def merged_data(self, label:str='merged events', labels:List[str]=None, as_signal:bool=False, sampling_period:float=1.0) -> Union[EventRecord, Signal]:
         """Merge the events together. TODO allow external function to be used instead of logical or
 
         Args:
             label (str, optional): Output label. Defaults to 'merged events'.
+            labels(List[str], optional): List of signals to be merged. Default to all signals if None
             as_signal (bool, optional): Return data as Signal instead of EventRecord. Defaults to False.
             sampling_period (float, optional): Desired sampling period if data is returned as Signal. Defaults to 1.0.
 
@@ -440,7 +465,11 @@ class EventFrame(dict):
             Union[EventRecord, Signal]: Merged data
         """
         # Merge EventRecord timeseries
-        series = [x.data for x in self.values()]
+        if labels is not None:
+            for val in labels:
+                if val not in self.labels:
+                    warnings.warn(f"Label {val} is not present in the EventFrame.")
+        series = [x.data for x in self.values() if ((labels is None) or (x.label in labels))]
         temp_series = TimeSeries.merge(series, operation= lambda x: int(any(x)))
 
         # Transform to EventRecord
@@ -450,6 +479,7 @@ class EventFrame(dict):
             return record.as_array(sampling_period)
         else:
             return record
+
     @property
     def n_events(self) -> int:
         """Return the total number of respiratory events
