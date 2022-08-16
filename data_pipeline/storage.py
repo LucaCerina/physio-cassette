@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from glob import glob
 from logging import warning
+from numbers import Number
 from pathlib import Path
 from typing import Any, Callable, Iterable, List, Tuple, Union
 
@@ -50,15 +51,15 @@ class Signal:
         self.data = np.array(self.data) if self.data is not None else None
         self.tstamps = np.array(self.tstamps) if self.tstamps is not None else None
 
-    def __setitem__(self, indexes:slice, values:np.ndarray):
+    def __setitem__(self, indexes:slice, values:Union[np.ndarray, Number]):
         """Update values of a slice of the Signal
 
         Args:
             indexes (slice): example sig[1:1000]
-            values (np.ndarray): new values
+            values (Union[np.ndarray, Number]): new values
         """
         assert isinstance(indexes, slice)
-        assert isinstance(values, np.ndarray)
+        assert isinstance(values, np.ndarray) or isinstance(values, Number)
         self.data[indexes] = values
 
     def __getitem__(self, indexes):
@@ -356,9 +357,8 @@ class EventRecord:
         data = TimeSeries()      
         self.start_time = t0
 
-        # data[t0] = 0 if start_value is None else start_value
         if ts_column is None and ts_sampling == 0:
-            raise(ValueError, "if ts_column is None a valid ts_sampling in seconds should be passed to the function")
+            raise(ValueError("if ts_column is None a valid ts_sampling in seconds should be passed to the function"))
 
         with open(filename, 'r') as csv_file:
             reader = csv.DictReader(csv_file, delimiter=delimiter)
