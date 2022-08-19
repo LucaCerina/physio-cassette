@@ -3,6 +3,7 @@ import inspect
 import os
 import pickle
 import warnings
+from copy import copy
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from glob import glob
@@ -395,6 +396,25 @@ class EventRecord:
         else:
             self.data = self.data.operation(None, lambda x,y: map(x))
 
+    def binarize(self, key:str, compact:bool=True):
+        """Remap helper, returns a binary EventRecord with only 1 where a key is present, 0 elsewhere
+
+        Args:
+            key (str): _description_
+            compact (bool, optional): _description_. Defaults to True.
+
+        Returns:
+            _type_: _description_
+        """
+        assert type(key)==type(self.data.first_value()), f"Binarize key has type {type(key)}, but data is of type {type(self.data.first_value())}"
+        output = copy(self)
+        output.remap(lambda x: int(x==key))
+        output.is_binary = True
+        if compact:
+            output.data.compact()
+
+        return output
+
     @property
     def n_events(self) -> int:
         return len(self)
@@ -413,6 +433,7 @@ class EventFrame(dict):
     start_date = None
 
     def __init__(self,*arg,**kw):
+        self.start_date = kw.pop('start_date', None)
         super(EventFrame, self).__init__(*arg, **kw)
 
     def from_csv(self, filename:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=','):
@@ -474,6 +495,7 @@ class EventFrame(dict):
 
         # Transform to EventRecord
         record = EventRecord(label=label, start_time=self.start_date, data=temp_series, start_value=temp_series.first_value())
+        record.is_binary = True if record.data.n_measurements()>1 and len(record.data.distribution().keys())==2 else False
 
         if as_signal:
             return record.as_array(sampling_period)
