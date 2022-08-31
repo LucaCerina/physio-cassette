@@ -72,12 +72,15 @@ class Signal:
         Returns:
             [Signal]: sliced signal
         """
-        return Signal(
-            label=self.label,
-            data=self.data[indexes],
-            fs=self.fs,
-            start_time=self.start_time, 
-            tstamps=self.tstamps[indexes] if self.tstamps is not None else self.tstamps)
+        if np.issubdtype(type(indexes), np.integer):
+            return self.data[indexes]
+        else:
+            return Signal(
+                label=self.label,
+                data=self.data[indexes],
+                fs=self.fs,
+                start_time=self.start_time, 
+                tstamps=self.tstamps[indexes] if self.tstamps is not None else self.tstamps)
 
     def __array__(self, dtype=None):
         return self.data
@@ -298,6 +301,12 @@ class EventRecord:
         return (self.data.n_measurements()-1)//2 if self.is_binary else self.data.n_measurements()
 
     def __getitem__(self, indexes):
+        if not isinstance(indexes, slice):
+            if np.issubdtype(type(indexes), np.integer):
+                return self.data.get_item_by_index(indexes)[1]
+            else:
+                return self.data[indexes]
+
         if indexes.start==indexes.stop==indexes.step==None:
             return self
 
@@ -494,8 +503,9 @@ class EventFrame(dict):
         temp_series = TimeSeries.merge(series, operation= lambda x: int(any(x)))
 
         # Transform to EventRecord
-        record = EventRecord(label=label, start_time=self.start_date, data=temp_series, start_value=temp_series.first_value())
-        record.is_binary = True if record.data.n_measurements()>1 and len(record.data.distribution().keys())==2 else False
+        start_value = temp_series.first_value() if not temp_series.is_empty() else 0
+        record = EventRecord(label=label, start_time=self.start_date, data=temp_series, start_value=start_value)
+        record.is_binary = True if record.data.n_measurements()>1 and len(record.data.distribution().keys())<=2 else False
 
         if as_signal:
             return record.as_array(sampling_period)
