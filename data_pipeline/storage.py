@@ -382,10 +382,10 @@ class EventRecord:
         """Return data as a regularly sampled array
 
         Args:
-            sampling_period (float): [description]
+            sampling_period (float): sampling period in seconds.
 
         Returns:
-            np.ndarray: [description]
+            Signal: Signal with fixed sampling period.
         """
         values = [y for _,y in self.data.sample(sampling_period=sampling_period)] if self.data.n_measurements()>1 else []
         return Signal(label = self.label, data = np.array(values), fs = 1/sampling_period, start_time=self.start_time)
