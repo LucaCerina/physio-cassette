@@ -85,6 +85,9 @@ class Signal:
     def __array__(self, dtype=None):
         return self.data
 
+    def __len__(self):
+        return len(self.data)
+
     def from_mat_file(self, mat_filename:str) -> Tuple[Any, str]:
         """Load a Signal from  NOPEformatted matlab file
 
@@ -252,7 +255,7 @@ class DataHolder(dict):
         return [*self]
 
     def is_data_present(self, input_labels:Union[str, Iterable]) -> bool:
-        """Check if every label given as input is present in the signalFrame
+        """Check if every label given as input is present in the DataHolder
 
         Args:
             input_labels (Union[str, Iterable]): string in the format A,B,C or iterable [A,B,C]
@@ -388,7 +391,8 @@ class EventRecord:
             Signal: Signal with fixed sampling period.
         """
         values = [y for _,y in self.data.sample(sampling_period=sampling_period)] if self.data.n_measurements()>1 else []
-        return Signal(label = self.label, data = np.array(values), fs = 1/sampling_period, start_time=self.start_time)
+        output_dtype = np.bool8 if self.is_binary else type(self.data.first_value())
+        return Signal(label = self.label, data = np.array(values).astype(output_dtype), fs = 1/sampling_period, start_time=self.start_time)
 
     def remap(self, map:Union[dict, Callable]) -> None:
         """Update values of events inplace with a dictionary mapping or a function
