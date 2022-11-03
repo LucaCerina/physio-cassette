@@ -1,6 +1,5 @@
 import csv
 import inspect
-import os
 import pickle
 import warnings
 from copy import copy
@@ -17,6 +16,14 @@ import pyedflib as edf
 from pymatreader import read_mat
 from scipy.io import savemat
 from traces import TimeSeries
+
+# Default matlab format for signals
+MATLAB_DEFAULT_SIGNAL_FORMAT = {
+    'data': 'data',
+    'sampling_rate': 'SampleRate',
+    'start_date': 'StartDate',
+    'start_time': 'StartTime'
+}
 
 @dataclass(repr=False)
 class Signal:
@@ -85,11 +92,13 @@ class Signal:
     def __len__(self):
         return len(self.data)
 
-    def from_mat_file(self, mat_filename:str) -> Tuple[Any, str]:
-        """Load a Signal from formatted matlab file
+    def from_mat_file(self, mat_filename:str, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S") -> Tuple[Any, str]:
+        """Load a Signal from formatted matlab file containing the data, start date and time, and sampling rate.
 
         Args:
-            mat_filename (str): filename
+            mat_filename (str): input filename
+            data_format (dict, optional): Name of the variables in the mat file. Defaults to MATLAB_DEFAULT_SIGNAL_FORMAT.
+            time_format (str, optional): format used to parse date and time string. Defaults to "%d/%m/%Y-%H:%M:%S".
 
         Returns:
             Tuple[Any, str]: the loaded `py:class:~Signal` (None if it cannot be loaded), label of the signal
@@ -97,17 +106,20 @@ class Signal:
         Raises:
             ValueError if Start datetime variables are missing in the matlab file
         """
+
         assert Path(mat_filename).suffix == '.mat', "Wrong file format, expected a Matlab file ending with .mat suffix"
         label = Path(mat_filename).stem
+
         try:
-            raw_mat = read_mat(mat_filename, variable_names=['data', 'SampleRate', 'StartDate', 'StartTime'])
-            assert 'StartDate' in raw_mat.keys(), "StartDate missing in Mat data file"
-            assert 'StartTime' in raw_mat.keys(), "StartTime missing in Mat data file"
+            raw_mat = read_mat(mat_filename, variable_names=list(data_format.values()))
+            assert data_format['start_date'] in raw_mat.keys(), "start date missing in Mat data file"
+            assert data_format['start_time'] in raw_mat.keys(), "start time missing in Mat data file"
         except (ValueError, AssertionError) as e:
             warning(f"{e} {mat_filename}")
             return None, label
-        start_time = datetime.strptime(f"{raw_mat['StartDate']}-{raw_mat['StartTime']}", "%d/%m/%Y-%H:%M:%S")
-        return Signal(label=label, data=raw_mat['data'], fs=raw_mat['SampleRate'], start_time=start_time), label
+
+        start_time = datetime.strptime(f"{raw_mat[data_format['start_date']]}-{raw_mat[data_format['start_time']]}", time_format)
+        return Signal(label=label, data=raw_mat[data_format['data']], fs=raw_mat[data_format['sampling_rate']], start_time=start_time), label
 
     @property
     def time(self):
@@ -186,12 +198,14 @@ class SignalFrame(dict):
                 self[label] = Signal(label=label, data=signal, fs=sig_header['sample_rate'], start_time=self.start_date)
         return self
 
-    def from_mat_folder(self, folder:str, signal_names:Union[str,list]=None):
+    def from_mat_folder(self, folder:str, signal_names:Union[str,list]=None, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S"):
         """Generate a SignalFrame from a folder of matlab files, according to a certain format
 
         Args:
             folder (str): name of the folder
             signal_names (Union[str,list], optional): restrict loading to certain signals only, otherwise load everything. Defaults to everything.
+            data_format (dict, optional): Name of the variables in the mat files. Defaults to MATLAB_DEFAULT_SIGNAL_FORMAT.
+            time_format (str, optional): format used to parse date and time string. Defaults to "%d/%m/%Y-%H:%M:%S".
 
         Returns:
             [self]: initialized SignalFrame
@@ -201,10 +215,11 @@ class SignalFrame(dict):
         for filename in filenames:
             label = Path(filename).stem
             if (signal_names is None) or (label in signal_names):
-                signal, label = Signal().from_mat_file(mat_filename=filename)
+                signal, label = Signal().from_mat_file(mat_filename=filename, data_format=data_format, time_format=time_format)
                 if signal:
                     self[label] = signal
-                    if self.start_date is None: # TODO assumption that all signals in the folder will have the same start time
+                    # Start date is assumed to be common for all signals, otherwise consider the oldest one
+                    if (self.start_date is None) or (signal.start_time < self.start_date): 
                         self.start_date = signal.start_time
         return self
 
