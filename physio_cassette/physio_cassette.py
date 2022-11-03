@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+__author__      = "Luca Cerina"
+__copyright__   = "Copyright 2022, Luca Cerina"
+__email__       = "lccerina@gmail.com"
+
+"""
+This module implements simple abstractions over data and I/O to store signals, time series, metadata and event annotations.
+Designed for physiological signals, but general enough to be used with any type of data.
+"""
+
 import csv
 import inspect
 import pickle
