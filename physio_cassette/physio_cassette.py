@@ -18,9 +18,6 @@ from pymatreader import read_mat
 from scipy.io import savemat
 from traces import TimeSeries
 
-# A list of signals not to be loaded on TU/e laptops
- NOPE= ['TBD'] #TODO fill this
-
 @dataclass(repr=False)
 class Signal:
     """A class that holds any signal recorded from a sensor
@@ -89,7 +86,7 @@ class Signal:
         return len(self.data)
 
     def from_mat_file(self, mat_filename:str) -> Tuple[Any, str]:
-        """Load a Signal from  NOPEformatted matlab file
+        """Load a Signal from formatted matlab file
 
         Args:
             mat_filename (str): filename
@@ -100,10 +97,8 @@ class Signal:
         Raises:
             ValueError if Start datetime variables are missing in the matlab file
         """
+        assert Path(mat_filename).suffix == '.mat', "Wrong file format, expected a Matlab file ending with .mat suffix"
         label = Path(mat_filename).stem
-        # TODO add assert for non mat files
-        if os.environ['userdomain'] != 'CODE1' and label in  NOPE# Gatekeep for  NOPEdata
-            return None, label
         try:
             raw_mat = read_mat(mat_filename, variable_names=['data', 'SampleRate', 'StartDate', 'StartTime'])
             assert 'StartDate' in raw_mat.keys(), "StartDate missing in Mat data file"
@@ -192,7 +187,7 @@ class SignalFrame(dict):
         return self
 
     def from_mat_folder(self, folder:str, signal_names:Union[str,list]=None):
-        """Generate a SignalFrame from a folder of matlab files, according to  NOPEformat
+        """Generate a SignalFrame from a folder of matlab files, according to a certain format
 
         Args:
             folder (str): name of the folder
