@@ -71,7 +71,7 @@ class Signal:
         """Return a slice of self as a Signal object
 
         Args:
-            indexes (slice): example sig[1:1000]
+            indexes (slice, int): example sig[1:1000] or sig[5]
 
         Returns:
             [Signal]: sliced signal
@@ -251,6 +251,8 @@ class SignalFrame(dict):
         return all([x in self.labels for x in labels_list])
             
 class DataHolder(dict):
+    """Minor abstraction over dict class to hold information together and check labels
+    """
     def __init__(self,*arg,**kw):
         super(DataHolder, self).__init__(*arg, **kw)
     
@@ -313,7 +315,29 @@ class EventRecord:
         """
         return (self.data.n_measurements()-1)//2 if self.is_binary else self.data.n_measurements()
 
+    def __index_to_key(self, start:int=None, stop:int=None) -> Tuple[Any,Any]:
+        """Convert integer indexes to TimeSeries keys
+
+        Args:
+            start (int, optional): initial index. Defaults to None.
+            stop (int, optional): end index. Defaults to None.
+
+        Returns:
+            Tuple[Any,Any]: keys associates with input indexes
+        """
+        tstart = self.data.get_item_by_index(start)[0] if start is not None else self.data.first_key()
+        tend =  self.data.get_item_by_index(stop)[0] if stop is not None else self.data.last_key()
+        return tstart, tend
+
     def __getitem__(self, indexes):
+        """Return a sliced EventRecord or a single value
+
+        Args:
+            indexes (slice, int): slice or single index, example rec[1:1000] or rec[5]
+
+        Returns:
+            [EventRecord]: _description_
+        """
         if not isinstance(indexes, slice):
             if np.issubdtype(type(indexes), np.integer):
                 return self.data.get_item_by_index(indexes)[1]
@@ -324,8 +348,7 @@ class EventRecord:
             return self
 
         if isinstance(indexes.start, int) or isinstance(indexes.stop, int):
-            tstart = self.data.get_item_by_index(indexes.start)[0] if indexes.start is not None else self.data.first_key()
-            tend =  self.data.get_item_by_index(indexes.stop)[0] if indexes.stop is not None else self.data.last_key()
+            tstart, tend = self.__index_to_key(indexes.start, indexes.stop)
         else:
             tstart = indexes.start if indexes.start is not None else self.data.first_key()
             tend = indexes.stop if indexes.stop is not None else self.data.last_key()
@@ -376,6 +399,22 @@ class EventRecord:
         return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
 
     def from_csv(self, filename:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=','):
+        """Instantiate an EventRecord from a CSV file
+
+        Args:
+            filename (str): name of the file to be parsed
+            label (str): label assigned to the output EventRecord
+            event_column (str): label of the event column in the CSV
+            t0 (datetime): initial timestamp
+            start_value (Any, optional): Initial value of the record. Defaults to None.
+            ts_column (str, optional): label of the timestamps column in the CSV. Defaults to None.
+            ts_is_datetime (bool, optional): Flag if the ts column is absolute timestamps, or an increasing value from t0. Defaults to True.
+            ts_sampling (float, optional): sampling interval if timestamps are relative. Defaults to 0.
+            delimiter (str, optional): CSV column delimiter. Defaults to ','.
+
+        Returns:
+            [EventRecord]: EventRecord instance
+        """
         # Fill values
         data = TimeSeries()      
         self.start_time = t0
@@ -473,7 +512,7 @@ class EventFrame(dict):
             delimiter (str, optional): CSV delimiter. Defaults to ','.
 
         Returns:
-            [type]: [description]
+            [EventFrame]: EventFrame instance
         """
         self.start_date = start_time
         # Allocate temporary dictionary
@@ -560,6 +599,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         filename (str): filename of the cached data.
         cache_format (str, optional): Select which serialization format is used. Currently support 'pickle' and 'matlab'. Defaults to 'pickle'.
         force (bool, optional): Force the fucntion to be executed even if cache exists. Defaults to False.
+        (args) Arguments of the function to be called
 
     Returns:
         Any: return of function 'func' with the same format
