@@ -1,0 +1,22 @@
+[build-system]
+requires = [
+    "setuptools"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "physio_cassette"
+version = "0.1.0"
+description = "Storage manager for signals (mostly physiological data), metadata and event annotations"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pyedflib",
+    "pymatreader",
+    "traces"
+]
+
+[metadata]
+author = "LucaCerina"
+author_email = "lccerina@gmail.com"
+license = "MIT"
