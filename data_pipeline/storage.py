@@ -19,7 +19,7 @@ from scipy.io import savemat
 from traces import TimeSeries
 
 # A list of signals not to be loaded on TU/e laptops
-***REMOVED***_DATA_SUBSET = ['TBD'] #TODO fill this
+ NOPE= ['TBD'] #TODO fill this
 
 @dataclass(repr=False)
 class Signal:
@@ -49,8 +49,8 @@ class Signal:
     tstamps: np.ndarray = None
 
     def __post_init__(self):
-        self.data = np.array(self.data) if self.data is not None else None
-        self.tstamps = np.array(self.tstamps) if self.tstamps is not None else None
+        self.data = np.array(self.data) if self.data is not None else np.array([])
+        self.tstamps = np.array(self.tstamps) if self.tstamps is not None else np.array([])
 
     def __setitem__(self, indexes:slice, values:Union[np.ndarray, Number]):
         """Update values of a slice of the Signal
@@ -102,7 +102,7 @@ class Signal:
         """
         label = Path(mat_filename).stem
         # TODO add assert for non mat files
-        if os.environ['userdomain'] != 'CODE1' and label in ***REMOVED***_DATA_SUBSET: # Gatekeep for ***REMOVED*** data
+        if os.environ['userdomain'] != 'CODE1' and label in  NOPE# Gatekeep for  NOPEdata
             return None, label
         try:
             raw_mat = read_mat(mat_filename, variable_names=['data', 'SampleRate', 'StartDate', 'StartTime'])
