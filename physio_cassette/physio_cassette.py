@@ -77,24 +77,49 @@ class Signal:
         assert isinstance(values, np.ndarray) or isinstance(values, Number)
         self.data[indexes] = values
 
-    def __getitem__(self, indexes):
+    def sub(self, indexes:Union[slice,Iterable]=None, stop:Any=None, start:Any=None, step:Any=None, reset_start_time:bool=True):
         """Return a slice of self as a Signal object
 
         Args:
-            indexes (slice, int): example sig[1:1000] or sig[5]
+            indexes (slice, Iterable): example slice(None,10,None), slice (1, 10, None), [1,10,2]. Single values are not accepted, use __getitem__ slicing
 
         Returns:
             [Signal]: sliced signal
         """
-        if np.issubdtype(type(indexes), np.integer):
-            return self.data[indexes]
+        assert (indexes is not None) ^ ((stop is not None) or (start is not None and stop is not None)), "At least indexes, stop, or start and stop should be assigned, but not together"
+        assert ~np.issubdtype(type(indexes), np.integer), "Please refrain from calling sub on a single value, use your_signal[idx] instead"
+        assert isinstance(indexes, slice) or (isinstance(indexes, Iterable) and len(indexes)<=3), "Invalid indexes, use slice object or a iterable with a maximum length of 3"
+
+        # Define indexes
+        if indexes is not None:
+            _indexes = indexes if isinstance(indexes, slice) else slice(*indexes)
         else:
-            return Signal(
-                label=self.label,
-                data=self.data[indexes],
-                fs=self.fs,
-                start_time=self.start_time, 
-                tstamps=self.tstamps[indexes] if self.tstamps is not None else self.tstamps)
+            _indexes = slice(start, stop, step)
+
+        # Check for start time slicing
+        if reset_start_time:
+            _start_time = self.tstamps[_indexes.start] if self.tstamps is not None else self.start_time + timedelta(seconds=_indexes.start/self.fs)
+        else:
+            _start_time = self.start_time
+
+        return Signal(
+            label=self.label,
+            data=self.data[_indexes],
+            fs=self.fs,
+            start_time=_start_time,
+            tstamps=self.tstamps[_indexes] if self.tstamps is not None else self.tstamps
+        )
+
+    def __getitem__(self, indexes):
+        """Return only a data slice, without other Signal attributed attached
+
+        Args:
+            indexes (slice, int): Example sig[1:1000], sig[5], sig[3:]
+
+        Returns:
+            [np.ndarray]: sliced data
+        """
+        return self.data[indexes]
 
     def __array__(self, dtype=None):
         return self.data
