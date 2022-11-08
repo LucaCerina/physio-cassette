@@ -330,7 +330,9 @@ class EventRecord:
         data: traces.TimeSeries
             timeseries with records at irregular timestamps
         is_binary: bool
-            flag variable to assess if the TimeSeries has only two possible states
+            flag variable if the TimeSeries has only two possible states
+        is_spikes: bool
+            flag variable if the TimeSeries encodes events (with null/negligible duration) instead of states/levels
         start_value: Any
             starting value at start_time
     """
@@ -338,6 +340,7 @@ class EventRecord:
     start_time: datetime = datetime.fromtimestamp(0)
     data: TimeSeries = TimeSeries()
     is_binary: bool = False
+    is_spikes: bool = False
     start_value: Any = None
 
     def __len__(self):
@@ -364,6 +367,18 @@ class EventRecord:
         tend =  self.data.get_item_by_index(stop)[0] if stop is not None else self.data.last_key()
         return tstart, tend
 
+    def __min_event_interval(self) -> float:
+        """Return minimum time interval in seconds in the data
+
+        Returns:
+            [float]: Minimum time interval
+        """
+        min_interval = np.inf
+        for curr,next in self.data.iterintervals():
+            interval = (next[0]-curr[0]).total_seconds()
+            min_interval = interval if interval<=min_interval else min_interval
+        return min_interval
+
     def __getitem__(self, indexes):
         """Return a sliced EventRecord or a single value
 
@@ -389,15 +404,16 @@ class EventRecord:
             tend = indexes.stop if indexes.stop is not None else self.data.last_key()
         return EventRecord(label=self.label, start_time=tstart, data=self.data.slice(tstart, tend), is_binary=self.is_binary, start_value=self.start_value)
 
-    def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray], is_binary:bool=False, start_value:Any=None):
+    def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray]=None, is_binary:bool=False, is_spikes:bool=False, start_value:Any=None):
         """Generate a EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have binary values and a start_value
 
         Args:
             label (str): label of the data instance
             t0 (datetime): initial datapoint, set to 0 if start_value is None
             ts_array (Union[list, np.ndarray]): timestamp array, can be datetimes or relative to t0
-            duration_array (Union[list, np.ndarray]): duration array, assumed in seconds, should have the same length of ts_array
+            duration_array (Union[list, np.ndarray]): duration array, assumed in seconds, should have the same length of ts_array. Use None to encode only events timing
             is_binary (bool, optional): state if the Events have only two possible values. Defaults to False.
+            is_spikes (bool, optional): state if the Events encodes only events with no known duration. Defaults to False.
             start_value (Any, optional): Initial value at t0. Defaults to None.
 
         Returns:
@@ -405,8 +421,13 @@ class EventRecord:
         """
         # Transform lists to arrays
         _ts_array = np.asarray(ts_array)
-        _duration_array = np.asarray(duration_array)
-        assert _ts_array.shape[0] == _duration_array.shape[0], f"Timestamps and Duration arrays should have the same size, got {_ts_array.shape} and {_duration_array.shape}"
+        _is_spikes = is_spikes or (duration_array is None)
+        if _is_spikes==False: 
+            _duration_array = np.asarray(duration_array)
+            assert _ts_array.shape[0] == _duration_array.shape[0], f"Timestamps and Duration arrays should have the same size, got {_ts_array.shape} and {_duration_array.shape}"
+        else:
+            _duration_array = np.zeros((_ts_array.shape[0]))*np.nan
+
 
         # Fill values
         data = TimeSeries()      
@@ -418,20 +439,15 @@ class EventRecord:
             return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
 
         # Timestamps are relative to start_time, assuming to be seconds
-        if not isinstance(_ts_array[0], (datetime, np.datetime64)):
-            for ts, dur in zip(_ts_array, _duration_array):
-                t_start = self.start_time + timedelta(seconds=float(ts))
+        rel_ts_flag = not isinstance(_ts_array[0], (datetime, np.datetime64))
+        for ts, dur in zip(_ts_array, _duration_array):
+            t_start = self.start_time + timedelta(seconds=float(ts)) if rel_ts_flag else ts
+            data[t_start] = 1
+            if ~np.isnan(dur):
                 t_end = t_start + timedelta(seconds=dur)
-                data[t_start] = 1
-                data[t_end] = 0
-        else:
-            for ts, dur in zip(_ts_array, _duration_array):
-                t_start = ts
-                t_end = t_start + timedelta(seconds=dur)
-                data[t_start] = 1
                 data[t_end] = 0
 
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value)
 
     def from_csv(self, filename:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=','):
         """Instantiate an EventRecord from a CSV file
@@ -466,7 +482,7 @@ class EventRecord:
         return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)    
 
     def as_array(self, sampling_period:float) -> Signal:
-        """Return data as a regularly sampled array
+        """Return data as a regularly sampled array. Assign time bin in case of spike arrays.
 
         Args:
             sampling_period (float): sampling period in seconds.
@@ -474,7 +490,23 @@ class EventRecord:
         Returns:
             Signal: Signal with fixed sampling period.
         """
-        values = [y for _,y in self.data.sample(sampling_period=sampling_period)] if self.data.n_measurements()>1 else []
+        # Check minimum interval
+        min_interval = self.__min_event_interval()
+        if sampling_period > min_interval/2:
+            warnings.warn(f"Risk of aliasing jitter for {self.label}! Sampling {sampling_period:.2f} seconds. Minimum interval in data {min_interval:.2f} seconds", RuntimeWarning, stacklevel=2)
+
+        # Assign values
+        if self.is_spikes == False:
+            # Regular data is resampled without binning
+            values = [y for _,y in self.data.sample(sampling_period=sampling_period)] if self.data.n_measurements()>1 else []
+        else:
+            # Assign to closest samples
+            n_samples = int(np.ceil((self.data.last_key() - self.start_time).total_seconds()/sampling_period))
+            values = np.zeros((n_samples,))
+            for t,_ in self.data.items():
+                t_sample = np.clip(int(np.round((t-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
+                values[t_sample] = 1
+
         output_dtype = np.bool8 if self.is_binary else type(self.data.first_value())
         return Signal(label = self.label, data = np.array(values).astype(output_dtype), fs = 1/sampling_period, start_time=self.start_time)
 
@@ -533,7 +565,7 @@ class EventFrame(dict):
         self.start_date = kw.pop('start_date', None)
         super(EventFrame, self).__init__(*arg, **kw)
 
-    def from_csv(self, filename:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=','):
+    def from_csv(self, filename:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=','):
         """Instantiate an EventFrame from a CSV file, recording certain labels separately
 
         Args:
@@ -541,7 +573,7 @@ class EventFrame(dict):
             labels (Iterable): desired labels to be extracted in the CSV file
             event_column (str): label of the event column
             ts_column (str): label of the timestamp column
-            duration_column (str): label of the duration column
+            duration_column (str): label of the duration column. If None store as spike EventRecord
             start_time (datetime, optional): Initial datetime of the data. Defaults to datetime.fromtimestamp(0).
             ts_is_datetime (bool, optional): Flag to parse ts column as datetime and not t-t0. Defaults to False.
             delimiter (str, optional): CSV delimiter. Defaults to ','.
@@ -562,12 +594,14 @@ class EventFrame(dict):
                     key = row[event_column]
                     # Extract timestamps and duration
                     ts = datetime.fromisoformat(row[ts_column]) if ts_is_datetime else float(row[ts_column])
-                    dur = float(row[duration_column])
                     temp_dict[key]['ts'].append(ts)
-                    temp_dict[key]['dur'].append(dur)
+                    if duration_column is not None:
+                        dur = float(row[duration_column])
+                        temp_dict[key]['dur'].append(dur)
         # Allocate the frames
         for key, data in temp_dict.items():
-            self[key] = EventRecord().from_ts_dur_array(label=key, t0=self.start_date, ts_array=data['ts'], duration_array=data['dur'], is_binary=True)
+            _is_spikes = len(data['dur']) == 0
+            self[key] = EventRecord().from_ts_dur_array(label=key, t0=self.start_date, ts_array=data['ts'], duration_array=data['dur'], is_binary=True, is_spikes=_is_spikes)
         return self
 
     def merged_data(self, label:str='merged events', labels:List[str]=None, as_signal:bool=False, sampling_period:float=1.0) -> Union[EventRecord, Signal]:
