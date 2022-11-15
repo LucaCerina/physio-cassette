@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physio_cassette"
-version = "0.1.1"
+version = "0.1.2"
 description = "Storage manager for signals (mostly physiological data), metadata and event annotations"
 dependencies = [
     "numpy",
