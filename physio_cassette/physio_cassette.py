@@ -408,6 +408,35 @@ class EventRecord:
             tend = indexes.stop if indexes.stop is not None else self.data.last_key()
         return EventRecord(label=self.label, start_time=tstart, data=self.data.slice(tstart, tend), is_binary=self.is_binary, start_value=self.start_value)
 
+    def from_logical_array(self, label:str, t0:datetime, input_array:np.ndarray, fs:float=1):
+        """Create an EventRecord from a logical array representing state changes
+
+        Args:
+            label (str): label of the data instance
+            t0 (datetime): initial datapoint, 
+            input_array (np.ndarray): input array 
+            fs (float, optional): Sampling frequency of samples in the array. Defaults to 1Hz.
+
+        Returns:
+            EventRecord: output EventRecord
+        """
+        assert np.sum(input_array)>1 and np.sum(input_array)<input_array.shape[0], "The input array should have more than 1 state change"
+
+        # Convert to integer array
+        int_array = np.clip(input_array, 0, 1) if not np.issubdtype(input_array.dtype, bool) else input_array.astype(int)
+
+        # Detect state changes
+        starts = np.where(np.diff(int_array)==1)[0]
+        ends = np.where(np.diff(int_array)==-1)[0]
+        ends = ends if ends[0]>starts[0] else ends[1:]
+        starts = starts if len(starts)==len(ends) else starts[:-1]
+
+        # Create ts and duration arrays
+        durations = (ends - starts)/fs
+        ts = starts/fs
+
+        return self.from_ts_dur_array(label=label, t0=t0, ts_array=ts, duration_array=durations, is_binary=True, start_value=0)
+
     def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray]=None, is_binary:bool=False, is_spikes:bool=False, start_value:Any=None):
         """Generate a EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have binary values and a start_value
 
