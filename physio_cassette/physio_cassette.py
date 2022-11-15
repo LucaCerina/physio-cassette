@@ -127,6 +127,10 @@ class Signal:
     def __len__(self):
         return len(self.data)
 
+    @property
+    def ndim(self):
+        return self.data.ndim
+
     def from_mat_file(self, mat_filename:str, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S") -> Tuple[Any, str]:
         """Load a Signal from formatted matlab file containing the data, start date and time, and sampling rate.
 
