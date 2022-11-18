@@ -169,7 +169,7 @@ class Signal:
         """
         if self.tstamps is None or self.tstamps.shape[0] != self.data.shape[0]:
             if not np.isnan(self.fs):
-                steps = np.linspace(0, self.data.shape[0]/self.fs, self.data.shape[0])
+                steps = np.linspace(0, (self.data.shape[0]-1)/self.fs, self.data.shape[0])
                 tsteps = [self.start_time + timedelta(seconds=x) for x in steps]
             else: # TODO strong assumption that it's a signal determined by events arrival (e.g. RR intervals)
                 tsteps = [self.start_time + timedelta(seconds=x) for x in np.cumsum(self.data)]
@@ -474,10 +474,10 @@ class EventRecord:
         # Timestamps are relative to start_time, assuming to be seconds
         rel_ts_flag = not isinstance(_ts_array[0], (datetime, np.datetime64))
         for ts, dur in zip(_ts_array, _duration_array):
-            t_start = self.start_time + timedelta(seconds=float(ts)) if rel_ts_flag else ts
+            t_start = self.start_time + timedelta(seconds=ts) if rel_ts_flag else ts
             data[t_start] = 1
             if ~np.isnan(dur):
-                t_end = t_start + timedelta(seconds=dur)
+                t_end = self.start_time + timedelta(seconds=ts+dur)
                 data[t_end] = 0
 
         return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value)
@@ -529,13 +529,23 @@ class EventRecord:
             warnings.warn(f"Risk of aliasing jitter for {self.label}! Sampling {sampling_period:.2f} seconds. Minimum interval in data {min_interval:.2f} seconds", RuntimeWarning, stacklevel=2)
 
         # Assign values
+        n_samples = int(np.floor((self.data.last_key() - self.start_time).total_seconds()/sampling_period))
+        values = np.zeros((n_samples,))
         if self.is_spikes == False:
             # Regular data is resampled without binning
-            values = [y for _,y in self.data.sample(sampling_period=sampling_period)] if self.data.n_measurements()>1 else []
+            sample_delta = timedelta(seconds=sampling_period)
+            values[0] = self.start_value
+            for i in range(1, n_samples):
+                curr_t = self.start_time + timedelta(seconds=i*sampling_period)
+                if curr_t in self.data._d:
+                    values[i] = self.data[curr_t]
+                else:
+                    right_index = self.data._d.bisect_right(curr_t)
+                    prev_item = self.data.get_item_by_index(right_index-1)
+                    near_flag = (curr_t - prev_item[0]) <= sample_delta
+                    values[i] = prev_item[1] if near_flag else values[i-1]
         else:
             # Assign to closest samples
-            n_samples = int(np.ceil((self.data.last_key() - self.start_time).total_seconds()/sampling_period))
-            values = np.zeros((n_samples,))
             for t,_ in self.data.items():
                 t_sample = np.clip(int(np.round((t-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
                 values[t_sample] = 1
