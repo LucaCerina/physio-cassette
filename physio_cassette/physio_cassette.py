@@ -473,11 +473,13 @@ class EventRecord:
 
         # Timestamps are relative to start_time, assuming to be seconds
         rel_ts_flag = not isinstance(_ts_array[0], (datetime, np.datetime64))
+        delta_dur_flag = isinstance(_duration_array[0], timedelta)
         for ts, dur in zip(_ts_array, _duration_array):
             t_start = self.start_time + timedelta(seconds=ts) if rel_ts_flag else ts
             data[t_start] = 1
-            if ~np.isnan(dur):
-                t_end = self.start_time + timedelta(seconds=ts+dur)
+            if isinstance(dur, timedelta) or ~np.isnan(dur):
+                dur_seconds = dur.total_seconds() if delta_dur_flag else dur
+                t_end = (self.start_time + timedelta(seconds=ts+dur_seconds)) if rel_ts_flag else (ts + timedelta(seconds=dur_seconds)) 
                 data[t_end] = 0
 
         return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value)
@@ -552,6 +554,31 @@ class EventRecord:
 
         output_dtype = np.bool8 if self.is_binary else type(self.data.first_value())
         return Signal(label = self.label, data = np.array(values).astype(output_dtype), fs = 1/sampling_period, start_time=self.start_time)
+
+    def state_frequency(self, sampling_period:float=None) -> Union[Any,Signal]:
+        """Return frequency (in Hz) of state change, timestamped at each state starting from the second "high" value
+           Return a Signal with fixed sampling if sampling period is not None, a EventRecord otherwise
+
+        Args:
+            sampling_period (float, optional): Sampling period in seconds to return a Signal. Defaults to None.
+
+        Returns:
+            Union[Any,Signal]: EventRecord of change frequency or Signal sampled at a given period
+        """
+        assert self.is_binary,  "Method currently implemented only for binary EventRecord instances"
+
+        # We hypothesize the EventRecord starts with "low" value
+        output_data = TimeSeries()
+        for block in (block for i,block in enumerate(self.data.iterintervals(n=4)) if i%2==0):
+            output_data[block[-1][0]] = 1 / (block[-1][0]-block[-2][0]).total_seconds()
+
+        output_record = EventRecord(label=f"{self.label}_state_frequency", start_time=self.start_time, data=output_data, is_binary=False, start_value=self.start_value)
+
+        if sampling_period is None:
+            return output_record
+        else:
+            return output_record.as_array(sampling_period=sampling_period)
+
 
     def remap(self, map:Union[dict, Callable]) -> None:
         """Update values of events inplace with a dictionary mapping or a function
