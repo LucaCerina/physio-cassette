@@ -420,7 +420,8 @@ class EventRecord:
         Returns:
             EventRecord: output EventRecord
         """
-        assert np.sum(input_array)>1 and np.sum(input_array)<input_array.shape[0], "The input array should have more than 1 state change"
+        if np.sum(input_array)<1 or np.sum(input_array)>=input_array.shape[0]:
+            return self.from_ts_dur_array(label=label, t0=t0, ts_array=[], duration_array=[], is_binary=True, start_value=0)
 
         # Convert to integer array
         int_array = np.clip(input_array, 0, 1) if not np.issubdtype(input_array.dtype, bool) else input_array.astype(int)
