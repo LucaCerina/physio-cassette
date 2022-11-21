@@ -428,6 +428,7 @@ class EventRecord:
         # Detect state changes
         starts = np.where(np.diff(int_array)==1)[0]
         ends = np.where(np.diff(int_array)==-1)[0]
+        ends = ends if ends.size else [len(int_array)]
         ends = ends if ends[0]>starts[0] else ends[1:]
         starts = starts if len(starts)==len(ends) else starts[:-1]
 
