@@ -1,3 +1,4 @@
+from __future__ import annotations
 # -*- coding: utf-8 -*-
 __author__      = "Luca Cerina"
 __copyright__   = "Copyright 2022, Luca Cerina"
@@ -26,6 +27,8 @@ import pyedflib as edf
 from pymatreader import read_mat
 from scipy.io import savemat
 from traces import TimeSeries
+from operator import add, mul
+
 
 # Default matlab format for signals
 MATLAB_DEFAULT_SIGNAL_FORMAT = {
@@ -127,9 +130,86 @@ class Signal:
     def __len__(self):
         return len(self.data)
 
-    @property
-    def ndim(self):
-        return self.data.ndim
+    def __unary_op__(self:Signal, other:Union[int, float, np.ndarray, Signal], op:function) -> Signal:
+        """Apply a unary operation, accounting for edge cases
+
+        Args:
+            self (Signal): Input Signal
+            other (Union[int, float, np.ndarray, Signal]): other operand
+            op (function): operation
+
+        Returns:
+            Signal: Result of the operation
+        """
+        output = Signal(**vars(self))
+        if np.issubdtype(type(other), np.number):
+            output.data = op(self.data, other)
+        elif isinstance(other, np.ndarray):
+            if len(self)==len(other) and self.ndim==other.ndim:
+                output.data = op(self.data, other)
+            else:
+                raise ValueError(f"The Signal object and the array should have same size and dimensions, got {self.shape} and {other.shape}")
+        elif isinstance(other, Signal):
+            if self.fs==other.fs:
+                overlap_start, self_slice, other_slice = self.__get_overlap__(other)
+                output.data = []
+                if overlap_start is not None:
+                    output.data = op(self[self_slice],other[other_slice])
+                    output.start_time = overlap_start
+                    output.tstamps = None
+            else:
+                raise ValueError(f"The two Signal objects should have the same sampling frequency, got {self.fs} and {other.fs}")
+        else:
+            return NotImplemented
+        
+        return output
+
+    def __mul__(self:Signal, other: Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, mul)
+
+    def __rmul__(self:Signal, other: Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, mul)
+
+    def __add__(self:Signal, other: Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, add)
+
+    def __radd__(self:Signal, other: Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, add) 
+
+    def __get_overlap__(self:Signal, other:Signal) -> Tuple[datetime, slice, slice]:
+        """Get overlap between two Signal objects with same sampling frequency. Utility for unary operations
+
+        Args:
+            self (Signal): One Signal
+            other (Signal): Other Signal
+
+        Returns:
+            Tuple[datetime, slice, slice]:
+            Overlapping start_time, or None if it does not exist
+            Valid slice of self, Valid slice of other
+        """
+        assert self.fs==other.fs, "Overlap currently not defined for signals with different sampling frequency"
+        if (self.start_time != other.start_time) or len(self)!=len(other):
+            warnings.warn("Different start times or length. Only overlapping samples will be stored")
+
+        # Get larger start time
+        start_time = max(self.start_time, other.start_time)
+        if (start_time > self.start_time+timedelta(seconds=len(self)*self.fs)) or (start_time > other.start_time+timedelta(seconds=len(other)*other.fs)):
+            warnings.warn("No overlap between the data")
+            start_time = None
+            self_slice = slice(0,0)
+            other_slice = slice(0,0)
+        else:
+            self_start = int((start_time-self.start_time).total_seconds()//self.fs)
+            other_start = int((start_time-other.start_time).total_seconds()//other.fs)
+            # Get overlapping samples
+            min_common_samples = min(len(self[self_start:]), len(other[other_start:]))
+            self_stop = self_start+min_common_samples
+            other_stop = other_start+min_common_samples
+            self_slice = slice(self_start,self_stop)
+            other_slice = slice(other_start,other_stop)
+        
+        return start_time, self_slice, other_slice
 
     def from_mat_file(self, mat_filename:str, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S") -> Tuple[Any, str]:
         """Load a Signal from formatted matlab file containing the data, start date and time, and sampling rate.
@@ -159,6 +239,10 @@ class Signal:
 
         start_time = datetime.strptime(f"{raw_mat[data_format['start_date']]}-{raw_mat[data_format['start_time']]}", time_format)
         return Signal(label=label, data=raw_mat[data_format['data']], fs=raw_mat[data_format['sampling_rate']], start_time=start_time), label
+
+    @property
+    def ndim(self):
+        return self.data.ndim
 
     @property
     def time(self):
