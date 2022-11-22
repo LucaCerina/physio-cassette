@@ -27,7 +27,7 @@ import pyedflib as edf
 from pymatreader import read_mat
 from scipy.io import savemat
 from traces import TimeSeries
-from operator import add, mul
+from operator import *
 
 
 # Default matlab format for signals
@@ -164,17 +164,51 @@ class Signal:
         
         return output
 
-    def __mul__(self:Signal, other: Union[int, float, np.ndarray, Signal]) -> Signal:
+    def __mul__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, mul)
 
-    def __rmul__(self:Signal, other: Union[int, float, np.ndarray, Signal]) -> Signal:
+    def __rmul__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, mul)
 
-    def __add__(self:Signal, other: Union[int, float, np.ndarray, Signal]) -> Signal:
+    def __add__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, add)
 
-    def __radd__(self:Signal, other: Union[int, float, np.ndarray, Signal]) -> Signal:
-        return self.__unary_op__(other, add) 
+    def __radd__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, add)
+
+    def __logical_op__(self:Signal, other:Union[int, float, bool], op:function) -> np.ndarray:
+        """Apply logical operation only on data. DOES NOT return a Signal
+
+        Args:
+            self (Signal): Input signal
+            other (Union[int, float, bool]): Scalar comparison value
+            op (function): logical operator
+
+        Returns:
+            np.ndarray: Output of the logical operation
+        """
+        if np.issubdtype(type(other), np.number) or np.issubdtype(type(other), bool):
+            return op(self.data, other)
+        else:
+            return NotImplemented
+
+    def __lt__(self:Signal, other:Union[int,float,bool]) -> np.ndarray:
+        return self.__logical_op__(other, lt)
+
+    def __le__(self:Signal, other:Union[int,float,bool]) -> np.ndarray:
+        return self.__logical_op__(other, le)
+
+    def __eq__(self:Signal, other:Union[int,float,bool]) -> np.ndarray:
+        return self.__logical_op__(other, eq)
+
+    def __ne__(self:Signal, other:Union[int,float,bool]) -> np.ndarray:
+        return self.__logical_op__(other, ne)
+
+    def __ge__(self:Signal, other:Union[int,float,bool]) -> np.ndarray:
+        return self.__logical_op__(other, ge)
+
+    def __gt__(self:Signal, other:Union[int,float,bool]) -> np.ndarray:
+        return self.__logical_op__(other, gt)
 
     def __get_overlap__(self:Signal, other:Signal) -> Tuple[datetime, slice, slice]:
         """Get overlap between two Signal objects with same sampling frequency. Utility for unary operations
