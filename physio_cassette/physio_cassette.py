@@ -651,7 +651,7 @@ class EventRecord:
             warnings.warn(f"Risk of aliasing jitter for {self.label}! Sampling {sampling_period:.2f} seconds. Minimum interval in data {min_interval:.2f} seconds", RuntimeWarning, stacklevel=2)
 
         # Assign values
-        n_samples = int(np.floor((self.data.last_key() - self.start_time).total_seconds()/sampling_period))
+        n_samples = int(np.floor((self.data.last_key() - self.start_time).total_seconds()/sampling_period)) if self.data.last_key()>self.start_time else 1
         values = np.zeros((n_samples,))
         if self.is_spikes == False:
             # Regular data is resampled without binning
