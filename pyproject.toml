@@ -25,6 +25,9 @@ dependencies = [
     "traces>=0.5.1"
 ]
 
+[project.urls]
+homepage = "https://github.com/LucaCerina/physio-cassette"
+
 [metadata]
 author = "LucaCerina"
 author_email = "lccerina@gmail.com"
