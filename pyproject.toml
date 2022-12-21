@@ -7,13 +7,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "physio_cassette"
 version = "0.1.6"
-description = "Storage manager for signals (mostly physiological data), metadata and event annotations"
+description = "Storage structures for signals (mostly physiological data), metadata and event annotations"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+]
+keywords = ['data storage', 'physiological signals', 'event records']
 dependencies = [
-    "numpy",
-    "scipy",
-    "pyedflib",
+    "numpy>1.20",
+    "scipy>1.9",
+    "pyedflib>=0.1.28",
     "pymatreader",
-    "traces"
+    "traces>=0.5.1"
 ]
 
 [metadata]
