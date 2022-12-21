@@ -42,3 +42,12 @@ $ pip install physio_cassette
 - [traces](https://github.com/datascopeanalytics/traces)
 - [pyedflib](https://github.com/holgern/pyedflib)
 - [pymatreader](https://pypi.org/project/pymatreader/)
+
+
+#### Contribution
+If you feel generous and this library helped your project:
+
+[![Buy me a coffee][buymeacoffee-shield]][buymeacoffee]
+
+[buymeacoffee]: https://www.buymeacoffee.com/u2Vb3kO
+[buymeacoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png
