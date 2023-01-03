@@ -176,6 +176,12 @@ class Signal:
     def __radd__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, add)
 
+    def __sub__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, sub)
+
+    def __rsub__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, sub)
+
     def __logical_op__(self:Signal, other:Union[int, float, bool], op:function) -> np.ndarray:
         """Apply logical operation only on data. DOES NOT return a Signal
 
