@@ -418,17 +418,18 @@ class DataHolder(dict):
     """
     def __init__(self,*arg,**kw):
         super(DataHolder, self).__init__(*arg, **kw)
-    
-    # Labels property
-    @property
-    def labels(self):
-        """Return label names
 
-        Returns:
-            [list]: label of all the data in the DataHolder
+    def relabel(self, mapper:dict):
+        """Update labels
+
+        Args:
+            mapper (dict): Dictionary with new labels
         """
-        return [*self]
-
+        for key, val in mapper.items():
+            if key in self:
+                self[val] = self.pop(key)
+                self[val].label = val
+    
     def is_data_present(self, input_labels:Union[str, Iterable]) -> bool:
         """Check if every label given as input is present in the DataHolder
 
@@ -445,6 +446,17 @@ class DataHolder(dict):
             labels_list = input_labels
         
         return all([x in self.labels for x in labels_list])
+
+    # Labels property
+    @property
+    def labels(self):
+        """Return label names
+
+        Returns:
+            [list]: label of all the data in the DataHolder
+        """
+        return [*self]
+
 
 @dataclass
 class EventRecord:
@@ -563,8 +575,36 @@ class EventRecord:
 
         return self.from_ts_dur_array(label=label, t0=t0, ts_array=ts, duration_array=durations, is_binary=True, start_value=0)
 
+    def from_state_array(self, label:str, t0:datetime, input_array:Iterable, ts_sampling:float=1.0):
+        """Generate an EventRecord from an array of states, with a fixed sampling time in seconds.
+
+        Args:
+            label (str): label of the data instance
+            t0 (datetime): initial timestamp
+            input_array (Iterable): list of events
+            ts_sampling (float, optional): Desired sampling time. Defaults to 1.0 seconds.
+
+        Returns:
+            [self]: initialized EventRecord
+        """
+        if isinstance(input_array, np.ndarray):
+            assert input_array.ndim==1, "EventRecord from_state_array accepts only 1D arrays"
+
+        if len(input_array)==0:
+            warnings.warn("Empty input in EventRecord data")
+            return self.from_ts_dur_array(label=label, t0=t0, ts_array=[], duration_array=[], is_binary=True, start_value=0)
+
+        data = TimeSeries()
+        for i, val in enumerate(input_array):
+            ts = t0 + timedelta(seconds=i*ts_sampling)
+            data[ts] = val
+        data.compact()
+
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=data[t0])
+
+
     def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray]=None, is_binary:bool=False, is_spikes:bool=False, start_value:Any=None):
-        """Generate a EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have binary values and a start_value
+        """Generate an EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have binary values and a start_value
 
         Args:
             label (str): label of the data instance
@@ -576,7 +616,7 @@ class EventRecord:
             start_value (Any, optional): Initial value at t0. Defaults to None.
 
         Returns:
-            [self]: initialized EventFrame
+            [self]: initialized EventRecord
         """
         # Transform lists to arrays
         _ts_array = np.asarray(ts_array)
@@ -610,8 +650,8 @@ class EventRecord:
 
         return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value)
 
-    def from_csv(self, filename:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=','):
-        """Instantiate an EventRecord from a CSV file
+    def from_csv(self, filename:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=',', skiprows:int=0, **kwargs):
+        r"""Instantiate an EventRecord from a CSV file
 
         Args:
             filename (str): name of the file to be parsed
@@ -623,10 +663,14 @@ class EventRecord:
             ts_is_datetime (bool, optional): Flag if the ts column is absolute timestamps, or an increasing value from t0. Defaults to True.
             ts_sampling (float, optional): sampling interval if timestamps are relative. Defaults to 0.
             delimiter (str, optional): CSV column delimiter. Defaults to ','.
+            skiprows (int, optional): Skip a certain number of rows before the csv reader
+            \**kwargs: keywords arguments passed to csv reader (e.g. skiprows)
 
         Returns:
             [EventRecord]: EventRecord instance
         """
+        assert skiprows>=0, "Skiprows argument should be positive"
+
         # Fill values
         data = TimeSeries()      
         self.start_time = t0
@@ -635,6 +679,8 @@ class EventRecord:
             raise(ValueError("if ts_column is None a valid ts_sampling in seconds should be passed to the function"))
 
         with open(filename, 'r') as csv_file:
+            for _ in range(skiprows):
+                csv_file.readline()
             reader = csv.DictReader(csv_file, delimiter=delimiter)
             for row in reader:
                 value = row[event_column]
@@ -761,8 +807,8 @@ class EventFrame(dict):
         self.start_date = kw.pop('start_date', None)
         super(EventFrame, self).__init__(*arg, **kw)
 
-    def from_csv(self, filename:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=','):
-        """Instantiate an EventFrame from a CSV file, recording certain labels separately
+    def from_csv(self, filename:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=',', skiprows:int=0, **kwargs):
+        r"""Instantiate an EventFrame from a CSV file, recording certain labels separately
 
         Args:
             filename (str): name of the file to be parsed
@@ -773,10 +819,14 @@ class EventFrame(dict):
             start_time (datetime, optional): Initial datetime of the data. Defaults to datetime.fromtimestamp(0).
             ts_is_datetime (bool, optional): Flag to parse ts column as datetime and not t-t0. Defaults to False.
             delimiter (str, optional): CSV delimiter. Defaults to ','.
+            skiprows (int, optional): Skip a certain number of rows before the csv reader
+            \**kwargs: keywords arguments passed to csv reader (e.g. skiprows)
 
         Returns:
             [EventFrame]: EventFrame instance
         """
+        assert skiprows>=0, "Skiprows argument should be positive"
+
         self.start_date = start_time
         # Allocate temporary dictionary
         temp_dict = {}
@@ -784,6 +834,8 @@ class EventFrame(dict):
             temp_dict[label] = {'ts':[], 'dur':[]}
         # Parse CSV file
         with open(filename, 'r') as csv_file:
+            for _ in range(skiprows):
+                csv_file.readline()
             reader = csv.DictReader(csv_file, delimiter=delimiter)
             for row in reader:
                 if row[event_column] in labels:
@@ -829,6 +881,17 @@ class EventFrame(dict):
             return record.as_array(sampling_period)
         else:
             return record
+
+    def relabel(self, mapper:dict):
+        """Update labels
+
+        Args:
+            mapper (dict): Dictionary with new labels
+        """
+        for key, val in mapper.items():
+            if key in self:
+                self[val] = self.pop(key)
+                self[val].label = val
 
     @property
     def n_events(self) -> int:
