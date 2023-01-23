@@ -152,3 +152,4 @@ cython_debug/
 test.py
 *.xlsx
 *.csv
+build.bat

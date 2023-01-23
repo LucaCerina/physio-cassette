@@ -38,6 +38,51 @@ MATLAB_DEFAULT_SIGNAL_FORMAT = {
     'start_time': 'StartTime'
 }
 
+class DataHolder(dict):
+    """Minor abstraction over dict class to hold information together and check labels
+    """
+    def __init__(self,*arg,**kw):
+        super(DataHolder, self).__init__(*arg, **kw)
+
+    def relabel(self, mapper:dict):
+        """Update labels
+
+        Args:
+            mapper (dict): Dictionary with new labels
+        """
+        for key, val in mapper.items():
+            if key in self:
+                self[val] = self.pop(key)
+                self[val].label = val
+    
+    def is_data_present(self, input_labels:Union[str, Iterable]) -> bool:
+        """Check if every label given as input is present in the DataHolder
+
+        Args:
+            input_labels (Union[str, Iterable]): string in the format A,B,C or iterable [A,B,C]
+
+        Returns:
+            bool: If every label in input_labels is present
+        """
+        # Distinguish pure iterables from string labels e.g. EEG,ECG,Flow
+        if isinstance(input_labels, str):
+            labels_list = input_labels.split(',')
+        else:
+            labels_list = input_labels
+        
+        return all([x in self.labels for x in labels_list])
+
+    # Labels property
+    @property
+    def labels(self):
+        """Return label names
+
+        Returns:
+            [list]: label of all the data in the DataHolder
+        """
+        return [*self]
+
+
 @dataclass(repr=False)
 class Signal:
     """A class that holds any signal recorded from a sensor
@@ -306,7 +351,7 @@ class Signal:
         return self.data.shape
     
 
-class SignalFrame(dict):
+class SignalFrame(DataHolder):
     """A class to hold various `py:class:~Signal` together
     
     Attributes:
@@ -385,78 +430,6 @@ class SignalFrame(dict):
                     if (self.start_date is None) or (signal.start_time < self.start_date): 
                         self.start_date = signal.start_time
         return self
-
-    # Labels property
-    @property
-    def labels(self):
-        """Return label names
-
-        Returns:
-            [list]: label of all Signals in the SignalFrame
-        """
-        return [*self]
-
-    def is_data_present(self, input_labels:Union[str, Iterable]) -> bool:
-        """Check if every label given as input is present in the signalFrame
-
-        Args:
-            input_labels (Union[str, Iterable]): string in the format A,B,C or iterable [A,B,C]
-
-        Returns:
-            bool: If every label in input_labels is present
-        """
-        # Distinguish pure iterables from string labels e.g. EEG,ECG,Flow
-        if isinstance(input_labels, str):
-            labels_list = input_labels.split(',')
-        else:
-            labels_list = input_labels
-        
-        return all([x in self.labels for x in labels_list])
-            
-class DataHolder(dict):
-    """Minor abstraction over dict class to hold information together and check labels
-    """
-    def __init__(self,*arg,**kw):
-        super(DataHolder, self).__init__(*arg, **kw)
-
-    def relabel(self, mapper:dict):
-        """Update labels
-
-        Args:
-            mapper (dict): Dictionary with new labels
-        """
-        for key, val in mapper.items():
-            if key in self:
-                self[val] = self.pop(key)
-                self[val].label = val
-    
-    def is_data_present(self, input_labels:Union[str, Iterable]) -> bool:
-        """Check if every label given as input is present in the DataHolder
-
-        Args:
-            input_labels (Union[str, Iterable]): string in the format A,B,C or iterable [A,B,C]
-
-        Returns:
-            bool: If every label in input_labels is present
-        """
-        # Distinguish pure iterables from string labels e.g. EEG,ECG,Flow
-        if isinstance(input_labels, str):
-            labels_list = input_labels.split(',')
-        else:
-            labels_list = input_labels
-        
-        return all([x in self.labels for x in labels_list])
-
-    # Labels property
-    @property
-    def labels(self):
-        """Return label names
-
-        Returns:
-            [list]: label of all the data in the DataHolder
-        """
-        return [*self]
-
 
 @dataclass
 class EventRecord:
@@ -790,7 +763,7 @@ class EventRecord:
     def n_events(self) -> int:
         return len(self)
 
-class EventFrame(dict):
+class EventFrame(DataHolder):
     """A class to hold various EventRecord together
     
     Attributes:
@@ -882,17 +855,6 @@ class EventFrame(dict):
         else:
             return record
 
-    def relabel(self, mapper:dict):
-        """Update labels
-
-        Args:
-            mapper (dict): Dictionary with new labels
-        """
-        for key, val in mapper.items():
-            if key in self:
-                self[val] = self.pop(key)
-                self[val].label = val
-
     @property
     def n_events(self) -> int:
         """Return the total number of respiratory events
@@ -905,16 +867,6 @@ class EventFrame(dict):
             output += x.n_events
 
         return output
-
-    # Labels property
-    @property
-    def labels(self):
-        """Return label names
-
-        Returns:
-            [list]: label of all Signals in the EventFrame
-        """
-        return [*self]
 
 def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='pickle', force:bool=False) -> Any:
     """Minimal wrapper to automatically manage cache of functions. Currently support pickle and matlab formats.

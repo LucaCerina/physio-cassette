@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physio_cassette"
-version = "0.1.7"
+version = "0.1.8"
 description = "Storage structures for signals (mostly physiological data), metadata and event annotations"
 readme = "README.md"
 requires-python = ">=3.8"

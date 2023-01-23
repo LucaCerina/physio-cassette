@@ -13,7 +13,7 @@ Physio Cassette is just that: Numpy arrays and dictionaries with flair. Physio C
 - EventRecord: a class for time annotated events based on [traces](https://github.com/datascopeanalytics/traces) TimeSeries with support for binary, trains, and multilevel events
 
 ### Containers
-- DataHolder: your box of cables based on Python dictionary
+- DataHolder: your box of cables based on Python dictionary. Parent class of SignalFrame and EventFrame.
 - SignalFrame: A container for Signal data structures. Can load data from numpy arrays, MatLab .mat files and EDF files
 - EventFrame: A container for EventRecord structures, with support to merge operations (e.g. events annotated across multiple channels).
 Can load data from CSV files, with each annotated label stored as its own EventRecord.
