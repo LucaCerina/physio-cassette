@@ -22,7 +22,8 @@ dependencies = [
     "scipy>1.9",
     "pyedflib>=0.1.28",
     "pymatreader",
-    "traces>=0.5.1"
+    "traces>=0.5.1",
+    "python-dateutil>=2.8.2"
 ]
 
 [project.urls]

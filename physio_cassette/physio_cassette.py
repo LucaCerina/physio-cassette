@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 # -*- coding: utf-8 -*-
 __author__      = "Luca Cerina"
 __copyright__   = "Copyright 2022, Luca Cerina"
@@ -28,6 +29,7 @@ from pymatreader import read_mat
 from scipy.io import savemat
 from traces import TimeSeries
 from operator import *
+from dateutil import parser
 
 
 # Default matlab format for signals
@@ -37,6 +39,39 @@ MATLAB_DEFAULT_SIGNAL_FORMAT = {
     'start_date': 'StartDate',
     'start_time': 'StartTime'
 }
+
+def parse_timestamp(timestamp:str, start_time:datetime) -> datetime:
+    """Parse a timestamp string to add it to an EventRecord/Frame.
+    A timestamp is always assumed to be after the start time
+
+    Args:
+        timestamp (str): String to be parsed
+        start_time (datetime): Start time of the recording
+
+    Returns:
+        datetime: Parsed datetime
+    """
+    # Initial assumption is timestamp has ISO8601 format
+    try:
+        output = datetime.fromisoformat(timestamp)
+    except ValueError:
+        if len(timestamp)>10:
+            try:
+                output = parser.parse(timestamp, fuzzy=True)
+            except ValueError:
+                # TODO extend functionalities to support other formats
+                raise ValueError("Unsupported data format. Update your data")
+        else:
+            timestamp = timestamp.replace('.',':', 2)
+            output = datetime.strptime(timestamp, "%H:%M:%S")
+
+    # Correct for start_time
+    if output < start_time:
+        output = output.replace(year=start_time.year, month=start_time.month, day=start_time.day)
+        if output.hour<12 and start_time.hour>12:
+            output += timedelta(days=1)
+
+    return output
 
 class DataHolder(dict):
     """Minor abstraction over dict class to hold information together and check labels
@@ -657,7 +692,7 @@ class EventRecord:
             reader = csv.DictReader(csv_file, delimiter=delimiter)
             for row in reader:
                 value = row[event_column]
-                ts = datetime.fromisoformat(row[ts_column]) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
+                ts = parse_timestamp(row[ts_column], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
                 data[ts] = value
         return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)    
 
@@ -811,14 +846,21 @@ class EventFrame(DataHolder):
                 csv_file.readline()
             reader = csv.DictReader(csv_file, delimiter=delimiter)
             for row in reader:
-                if row[event_column] in labels:
+                if any([re.search(x, row[event_column]) for x in labels]):
                     key = row[event_column]
+                    # Add key in temp_dict if not present
+                    if key not in temp_dict:
+                        temp_dict[key] = {'ts':[], 'dur':[]}
                     # Extract timestamps and duration
-                    ts = datetime.fromisoformat(row[ts_column]) if ts_is_datetime else float(row[ts_column])
+                    ts = parse_timestamp(row[ts_column], self.start_date) if ts_is_datetime else float(row[ts_column])
                     temp_dict[key]['ts'].append(ts)
                     if duration_column is not None:
                         dur = float(row[duration_column])
                         temp_dict[key]['dur'].append(dur)
+        # Remove empty data
+        for key in temp_dict.keys():
+            if len(temp_dict[key]['ts'])==0:
+                temp_dict.pop(key)
         # Allocate the frames
         for key, data in temp_dict.items():
             _is_spikes = len(data['dur']) == 0

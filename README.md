@@ -42,6 +42,7 @@ $ pip install physio_cassette
 - [traces](https://github.com/datascopeanalytics/traces)
 - [pyedflib](https://github.com/holgern/pyedflib)
 - [pymatreader](https://pypi.org/project/pymatreader/)
+- [dateutil](https://pypi.org/project/python-dateutil/)
 
 
 #### Contribution
