@@ -842,7 +842,8 @@ class EventRecord:
 
 
     def remap(self, map:Union[dict, Callable]) -> None:
-        """Update values of events inplace with a dictionary mapping or a function
+        """Update values of events inplace with a dictionary mapping or a function.
+        Ignore values that are not in the dictionary mapping.
 
         Args:
             map (Union[dict, Callable]): Mapping dictionary or Callable/lambda
@@ -851,8 +852,8 @@ class EventRecord:
         assert isinstance(map, dict) or isinstance(map, Callable), "Mapping should be a dict or a function"
         if isinstance(map, dict):
             for t, val in self.data:
-                new_val = map[val]
-                self.data[t] = new_val
+                new_val = map.get(val)
+                self.data[t] = val if new_val is None else new_val
         else:
             self.data = self.data.operation(None, lambda x,y: map(x))
 
