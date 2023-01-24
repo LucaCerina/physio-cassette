@@ -522,6 +522,16 @@ class EventRecord:
     is_spikes: bool = False
     start_value: Any = None
 
+    def __post_init_checks(self):
+        """Assign start value if not present already. Allow for other future checks
+
+        Returns:
+            [self]: initialized EventRecord
+        """
+        if self.start_value is not None and len(self) and self.data.first_key() > self.start_time:
+            self.data[self.start_time] = self.start_value
+        return self
+
     def __len__(self):
         """Override __len__ to return the number of events.
         In binary series first 'non-event' is subtracted. Start and end of event (state transitions) are considered together, so divided by 2
@@ -565,7 +575,7 @@ class EventRecord:
             indexes (slice, int): slice or single index, example rec[1:1000] or rec[5]
 
         Returns:
-            [EventRecord]: _description_
+            [EventRecord]: Sliced instance
         """
         if not isinstance(indexes, slice):
             if np.issubdtype(type(indexes), np.integer):
@@ -639,7 +649,7 @@ class EventRecord:
             data[ts] = val
         data.compact()
 
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=data[t0])
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=data[t0]).__post_init_checks()
 
 
     def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray]=None, is_binary:bool=False, is_spikes:bool=False, start_value:Any=None):
@@ -687,7 +697,7 @@ class EventRecord:
                 t_end = (self.start_time + timedelta(seconds=ts+dur_seconds)) if rel_ts_flag else (ts + timedelta(seconds=dur_seconds)) 
                 data[t_end] = 0
 
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value)
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value).__post_init_checks()
 
     def from_csv(self, filename:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=',', skiprows:int=0, **kwargs):
         r"""Instantiate an EventRecord from a CSV file
@@ -725,7 +735,7 @@ class EventRecord:
                 value = row[event_column]
                 ts = parse_timestamp(row[ts_column], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
                 data[ts] = value
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value).__post_init_checks()
 
     def from_wfdb_annotation(self, record_filepath:str, label:str, target_values:Union[str,list], t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
         """Instantiate an EventRecord from a Physionet WFDB annotation file.
@@ -775,7 +785,7 @@ class EventRecord:
                     data[ts] = 1
                 elif ann_key.endswith(openclose[1]) and ann_key[:-1]==target_key:
                     data[ts] = 0
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value).__post_init_checks()
 
     def as_array(self, sampling_period:float) -> Signal:
         """Return data as a regularly sampled array. Assign time bin in case of spike arrays.
@@ -967,6 +977,7 @@ class EventFrame(DataHolder):
         Returns:
             [EventFrame]: EventFrame instance
         """
+        self.start_date = t0
         for key,val in target_values.items():
             self[key] = EventRecord().from_wfdb_annotation(record_filepath, key, val, t0, start_value, extension, openclose)
         return self
