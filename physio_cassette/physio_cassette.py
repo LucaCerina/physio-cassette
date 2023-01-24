@@ -530,7 +530,7 @@ class EventRecord:
         Returns:
             int: Number of events
         """
-        return (self.data.n_measurements()-1)//2 if self.is_binary else self.data.n_measurements()
+        return (self.data.n_measurements()-1)//2 if self.is_binary and self.data.n_measurements()>0 else self.data.n_measurements()
 
     def __index_to_key(self, start:int=None, stop:int=None) -> Tuple[Any,Any]:
         """Convert integer indexes to TimeSeries keys
