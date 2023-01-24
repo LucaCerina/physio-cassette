@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import re
+
 # -*- coding: utf-8 -*-
 __author__      = "Luca Cerina"
 __copyright__   = "Copyright 2022, Luca Cerina"
@@ -20,17 +22,17 @@ from datetime import datetime, timedelta
 from glob import glob
 from logging import warning
 from numbers import Number
+from operator import *
 from pathlib import Path
 from typing import Any, Callable, Iterable, List, Tuple, Union
 
 import numpy as np
 import pyedflib as edf
+import wfdb
+from dateutil import parser
 from pymatreader import read_mat
 from scipy.io import savemat
 from traces import TimeSeries
-from operator import *
-from dateutil import parser
-
 
 # Default matlab format for signals
 MATLAB_DEFAULT_SIGNAL_FORMAT = {
@@ -441,6 +443,35 @@ class SignalFrame(DataHolder):
                 self[label] = Signal(label=label, data=signal, fs=sig_header['sample_rate'], start_time=self.start_date)
         return self
 
+    def from_wfdb_record(self, record_filepath:str, signal_names:Union[str,list]=None):
+        """Generate a SignalFrame from a Physionet WFDB record
+
+        Args:
+            record_filepath (str): Path to the WFDB record folder with record name repeated e.g. sample_data/tr100/tr100
+            signal_names (Union[str,list], optional): restrict loading to certain signals only, otherwise load everything. Defaults to None.
+
+        Returns:
+            [self]: initialized SignalFrame
+        """
+        self.__init__()
+        # Read header
+        header = wfdb.rdheader(record_filepath)
+        fs = header.fs
+        channels = header.sig_name
+        start_time = header.base_datetime if header.base_datetime is not None else datetime.fromtimestamp(0)
+        self.start_date = start_time
+        # Select channels to be read
+        channels_list = channels if signal_names is None else list(set(channels).intersection(set(signal_names)))
+        if len(channels_list)==0:
+            warnings.warn(f"Selected channels {signal_names} are not available in set {channels}. Returning empty frame!")
+            return self
+
+        # Read record
+        record = wfdb.rdrecord(record_filepath, channel_names=channels_list)
+        for i, ch in enumerate(channels_list):
+            self[ch] = Signal(label=ch, data=record.p_signal[:,i], fs=fs, start_time=start_time)
+        return self
+
     def from_mat_folder(self, folder:str, signal_names:Union[str,list]=None, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S"):
         """Generate a SignalFrame from a folder of matlab files, according to a certain format
 
@@ -694,7 +725,57 @@ class EventRecord:
                 value = row[event_column]
                 ts = parse_timestamp(row[ts_column], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
                 data[ts] = value
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)    
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)
+
+    def from_wfdb_annotation(self, record_filepath:str, label:str, target_values:Union[str,list], t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
+        """Instantiate an EventRecord from a Physionet WFDB annotation file.
+        If only target values are passed as an argument, the EventRecord will contain observed target values as states.
+        If openclose is passed, a binary state will be ON if the annotation starts with the opening character, OFF if it ends with closing one. e.g. '(apnea'->1, 'apnea)'->0
+
+        Args:
+            record_filepath (str): Path to the WFDB record folder with record name repeated e.g. sample_data/tr100/tr100
+            label (str): Label assigned to the output EventRecord
+            target_values (Union[str,list]): Values to be stored e.g. ['W', 'N1', 'N2'] or a single string for openclose scenarios e.g. 'apnea'
+            t0 (datetime): Initial timestamp
+            start_value (Any, optional): Override start value of the EventRecord. Defaults to None.
+            extension (str, optional): Extension of the WFDB annotation file. Defaults to 'ann'.
+            openclose (Tuple, optional): Tuple with opening and closing characters for events detection. Defaults to None.
+
+        Returns:
+            [EventRecord]: EventRecord instance
+        """
+        assert (openclose is None) or (len(openclose) == 2 and all([len(x)==1 for x in openclose])), "Openclose should be None or have exactly length two with a single character each"
+        # Assign target when looking for opening/closing annotations
+        is_binary = len(target_values)<=2 or openclose is not None
+        if openclose is not None:
+            if isinstance(target_values, list):
+                target_key = target_values[0]
+                warnings.warn(f"Ignoring extra targets in {target_values} with openclose {openclose}. Use EventFrame function for multiple events")
+            else:
+                target_key = target_values
+         
+        # Read record
+        record = wfdb.rdann(record_filepath, extension)
+        fs = record.fs
+
+        data = TimeSeries()
+        self.start_time = t0
+
+        # Iter data
+        for i in range(record.sample.shape[0]):
+            # Check where the key is in the annotations
+            ann_key = record.aux_note[i] if (len(record.symbol[i].strip())==0 or record.symbol[i]=='"') else record.symbol[i]
+            ts = self.start_time + timedelta(seconds=record.sample[i]/fs)
+            if (openclose is None) and ann_key in target_values:
+                # Store states separately
+                data[ts] = ann_key
+            elif (openclose is not None):
+                # Check if a state is opening or closing
+                if ann_key.startswith(openclose[0]) and ann_key[1:]==target_key:
+                    data[ts] = 1
+                elif ann_key.endswith(openclose[1]) and ann_key[:-1]==target_key:
+                    data[ts] = 0
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
 
     def as_array(self, sampling_period:float) -> Signal:
         """Return data as a regularly sampled array. Assign time bin in case of spike arrays.
@@ -865,6 +946,28 @@ class EventFrame(DataHolder):
         for key, data in temp_dict.items():
             _is_spikes = len(data['dur']) == 0
             self[key] = EventRecord().from_ts_dur_array(label=key, t0=self.start_date, ts_array=data['ts'], duration_array=data['dur'], is_binary=True, is_spikes=_is_spikes)
+        return self
+
+    def from_wfdb_annotation(self, record_filepath:str, target_values:dict, t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
+        """Instantiate an EventRecord from a Physionet WFDB annotation file.
+        Each item in target_values will be treated separately so that the EventFrame will have an EventRecord for each key.
+        If only target values are passed as an argument, the EventRecord will contain observed target values as states.
+        If openclose is passed, a binary state will be ON if the annotation starts with the opening character, OFF if it ends with closing one. e.g. '(apnea'->1, 'apnea)'->0
+
+        Args:
+            record_filepath (str): Path to the WFDB record folder with record name repeated e.g. sample_data/tr100/tr100
+            label (str): Label assigned to the output EventRecord
+            target_values (dict): Key of the EventFrame elements, with a set of values to be stored e.g. ['W', 'N1', 'N2'] or a single string for openclose scenarios e.g. 'apnea'
+            t0 (datetime): Initial timestamp
+            start_value (Any, optional): Override start value of the EventRecord. Defaults to None.
+            extension (str, optional): Extension of the WFDB annotation file. Defaults to 'ann'.
+            openclose (Tuple, optional): Tuple with opening and closing characters for events detection. Defaults to None.
+
+        Returns:
+            [EventFrame]: EventFrame instance
+        """
+        for key,val in target_values.items():
+            self[key] = EventRecord().from_wfdb_annotation(record_filepath, key, val, t0, start_value, extension, openclose)
         return self
 
     def merged_data(self, label:str='merged events', labels:List[str]=None, as_signal:bool=False, sampling_period:float=1.0) -> Union[EventRecord, Signal]:

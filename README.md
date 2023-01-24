@@ -14,9 +14,18 @@ Physio Cassette is just that: Numpy arrays and dictionaries with flair. Physio C
 
 ### Containers
 - DataHolder: your box of cables based on Python dictionary. Parent class of SignalFrame and EventFrame.
-- SignalFrame: A container for Signal data structures. Can load data from numpy arrays, MatLab .mat files and EDF files
+- SignalFrame: A container for Signal data structures.
 - EventFrame: A container for EventRecord structures, with support to merge operations (e.g. events annotated across multiple channels).
-Can load data from CSV files, with each annotated label stored as its own EventRecord.
+
+### Supported IO
+Physio-cassette aims to support seamlessly different file and data formats.
+Some functionalities will be added in the future. Other format specific features (e.g. physical/digital ranges in EDF and WFDB) are absent on purpose
+| Structure   | Numpy arrays       | CSV files          | Matlab files                       | EDF files          | Physionet WFDB     |
+|-------------|--------------------|--------------------|------------------------------------|--------------------|--------------------|
+| Signal      | :heavy_check_mark: |                    | :heavy_check_mark:                 | (use SignalFrame)  | (use SignalFrame)  |
+| SignalFrame | :heavy_check_mark: |                    | :heavy_check_mark: (1 file/signal) | :heavy_check_mark: | :heavy_check_mark: |
+| EventRecord | :heavy_check_mark: | :heavy_check_mark: |                                    |                    | :heavy_check_mark: |
+| EventFrame  | (use EventRecords) | :heavy_check_mark: |                                    |                    | :heavy_check_mark: |
 
 ### Caching
 To cache an operation simply do:
