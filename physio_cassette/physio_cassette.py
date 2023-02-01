@@ -890,6 +890,15 @@ class EventRecord:
     def n_events(self) -> int:
         return len(self)
 
+    @property
+    def duration(self) -> float:
+        """Return duration of the Record in seconds, as the difference between first key and end
+
+        Returns:
+            float: duration in seconds
+        """
+        return (self.data.last_key() - self.data.first_key()).total_seconds()
+
 class EventFrame(DataHolder):
     """A class to hold various EventRecord together
     
@@ -949,10 +958,6 @@ class EventFrame(DataHolder):
                     if duration_column is not None:
                         dur = float(row[duration_column])
                         temp_dict[key]['dur'].append(dur)
-        # Remove empty data
-        for key in temp_dict.keys():
-            if len(temp_dict[key]['ts'])==0:
-                temp_dict.pop(key)
         # Allocate the frames
         for key, data in temp_dict.items():
             _is_spikes = len(data['dur']) == 0
