@@ -899,6 +899,22 @@ class EventRecord:
         """
         return (self.data.last_key() - self.data.first_key()).total_seconds()
 
+    def time(self, relative:bool=False) -> np.ndarray:
+        """Return timestamps of events. Default to absolute timestamps, otherwise relative to start time (in seconds).
+
+        Args:
+            relative (bool, optional): Return timestamps as relative to start time. Defaults to False.
+
+        Returns:
+            np.ndarray: timestamps array
+        """
+        tstamps = [x[0] for x in self.data]
+        if relative:
+            tstamps = [(x-self.start_time).total_seconds() for x in tstamps]
+        output = np.array([tstamps]).T
+        output.reshape((-1,))
+        return output
+
 class EventFrame(DataHolder):
     """A class to hold various EventRecord together
     
