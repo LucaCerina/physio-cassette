@@ -864,8 +864,11 @@ class EventRecord:
             for t, val in self.data:
                 new_val = map.get(val)
                 self.data[t] = val if new_val is None else new_val
+            new_start_value = map.get(self.start_value)
+            self.start_value = self.start_value if new_start_value is None else new_start_value
         else:
             self.data = self.data.operation(None, lambda x,y: map(x))
+            self.start_value = map(self.start_value)
 
     def binarize(self, key:str, compact:bool=True):
         """Remap helper, returns a binary EventRecord with only 1 where a key is present, 0 elsewhere
