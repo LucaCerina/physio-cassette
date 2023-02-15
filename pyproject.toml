@@ -19,11 +19,12 @@ classifiers = [
 keywords = ['data storage', 'physiological signals', 'event records']
 dependencies = [
     "numpy>1.20",
-    "scipy>1.9",
     "pyedflib>=0.1.28",
     "pymatreader",
+    "python-dateutil>=2.8.2",
+    "scipy>1.9",
     "traces>=0.5.1",
-    "python-dateutil>=2.8.2"
+    "xmltodict>=0.13.0"
 ]
 
 [project.urls]

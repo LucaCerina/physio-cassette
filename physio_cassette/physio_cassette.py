@@ -29,6 +29,7 @@ from typing import Any, Callable, Iterable, List, Tuple, Union
 import numpy as np
 import pyedflib as edf
 import wfdb
+import xmltodict
 from dateutil import parser
 from pymatreader import read_mat
 from scipy.io import savemat
@@ -422,11 +423,11 @@ class SignalFrame(DataHolder):
             self[label] = Signal(label=label, data=signal, fs=fs)
         return self
     
-    def from_edf_file(self, edf_filename:str, signal_names:Union[str,list]=None):
+    def from_edf_file(self, record_filepath:str, signal_names:Union[str,list]=None):
         """Generate a SignalFrame from a single EDF/BDF file
 
         Args:
-            edf_filename (str): filename
+            record_filepath (str): filename of the EDF file
             signal_names (Union[str,list], optional): restrict loading to certain signals only, otherwise load everything. Defaults to None.
 
         Returns:
@@ -435,7 +436,7 @@ class SignalFrame(DataHolder):
 
         self.__init__()
         # Read edf file
-        signals, signal_headers, header = edf.highlevel.read_edf(edf_filename)
+        signals, signal_headers, header = edf.highlevel.read_edf(record_filepath)
         self.start_date = header['startdate']
         for sig_header, signal in zip(signal_headers, signals):
             label = sig_header['label']
@@ -699,11 +700,11 @@ class EventRecord:
 
         return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value).__post_init_checks()
 
-    def from_csv(self, filename:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=',', skiprows:int=0, **kwargs):
+    def from_csv(self, record_filepath:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=',', skiprows:int=0, **kwargs):
         r"""Instantiate an EventRecord from a CSV file
 
         Args:
-            filename (str): name of the file to be parsed
+            record_filepath (str): name of the file to be parsed
             label (str): label assigned to the output EventRecord
             event_column (str): label of the event column in the CSV
             t0 (datetime): initial timestamp
@@ -727,7 +728,7 @@ class EventRecord:
         if ts_column is None and ts_sampling == 0:
             raise(ValueError("if ts_column is None a valid ts_sampling in seconds should be passed to the function"))
 
-        with open(filename, 'r') as csv_file:
+        with open(record_filepath, 'r') as csv_file:
             for _ in range(skiprows):
                 csv_file.readline()
             reader = csv.DictReader(csv_file, delimiter=delimiter)
@@ -736,6 +737,57 @@ class EventRecord:
                 ts = parse_timestamp(row[ts_column], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
                 data[ts] = value
         return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value).__post_init_checks()
+
+    def from_xml(self, record_filepath:str, label:str, event_key:str, target_values:Union[str,list], ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
+        """Instantiate an EventRecord from a XML file. Assuming that a certain depth is represented as a list of annotated tags.
+
+        Args:
+            record_filepath (str): Name of the file to be parsed
+            label (str): Label assigned to the output EventRecord
+            event_key (str): Which XML tag is associated to the type of event
+            target_values (Union[str,list]): Values to be stored e.g. ['W', 'N1', 'N2'] or a single string for binary events (e.g. 'apnea')
+            ts_key (str): Which XML tag is associated to the timing of the event
+            t0 (datetime): Initial timestamp
+            start_value (Any, optional): Initial value of the record. Defaults to None.
+            duration_key (str, optional): Which XML tag is associated to the timing of the event. Defaults to None -> spikes for binary events, automatically embedded for other events (e.g. sleep stages).
+            events_path (list, optional): How to reach the right depth in the XML. Defaults to [] -> root of the document.
+            ts_is_datetime (bool, optional): Flag if the ts column is absolute timestamps, or an increasing value from t0. Defaults to True.
+            ts_sampling (float, optional): Sampling interval if timestamps are relative. Defaults to 1.0 seconds.
+
+        Raises:
+            KeyError: Raise an error if the events_path is not correct
+
+        Returns:
+            [EventRecord]: EventRecord instance
+        """
+        # Fill values
+        data = TimeSeries()
+        self.start_time = t0
+
+        # Load data
+        with open(record_filepath, 'rb') as xml_file:
+            input_data = xmltodict.parse(xml_file)
+            # Access data nest
+            for key in events_path:
+                if key in input_data:
+                    input_data = input_data.get(key)
+                else:
+                    raise KeyError(f"Nesting key not found in the parsed XML with path {events_path}")
+            assert isinstance(input_data, list), f"Expected events to be a list, got {type(input_data)} for path {events_path}"
+
+        # Parse data
+        is_binary = isinstance(target_values, str) or len(target_values)==1
+        is_spikes = is_binary and duration_key is None
+        for element in input_data:
+            if element[event_key] in target_values:
+                value = 1 if is_binary else element[event_key]
+                ts = parse_timestamp(element[ts_key], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=float(element[ts_key])*ts_sampling)
+                data[ts] = value
+                if duration_key is not None and is_binary:
+                    ts = ts + timedelta(seconds=float(element[duration_key])*ts_sampling)
+                    data[ts] = 0
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
+                
 
     def from_wfdb_annotation(self, record_filepath:str, label:str, target_values:Union[str,list], t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
         """Instantiate an EventRecord from a Physionet WFDB annotation file.
@@ -935,11 +987,11 @@ class EventFrame(DataHolder):
         self.start_date = kw.pop('start_date', None)
         super(EventFrame, self).__init__(*arg, **kw)
 
-    def from_csv(self, filename:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=',', skiprows:int=0, **kwargs):
+    def from_csv(self, record_filepath:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=',', skiprows:int=0, **kwargs):
         r"""Instantiate an EventFrame from a CSV file, recording certain labels separately
 
         Args:
-            filename (str): name of the file to be parsed
+            record_filepath (str): name of the file to be parsed
             labels (Iterable): desired labels to be extracted in the CSV file
             event_column (str): label of the event column
             ts_column (str): label of the timestamp column
@@ -961,7 +1013,7 @@ class EventFrame(DataHolder):
         for label in labels:
             temp_dict[label] = {'ts':[], 'dur':[]}
         # Parse CSV file
-        with open(filename, 'r') as csv_file:
+        with open(record_filepath, 'r') as csv_file:
             for _ in range(skiprows):
                 csv_file.readline()
             reader = csv.DictReader(csv_file, delimiter=delimiter)
@@ -983,8 +1035,34 @@ class EventFrame(DataHolder):
             self[key] = EventRecord().from_ts_dur_array(label=key, t0=self.start_date, ts_array=data['ts'], duration_array=data['dur'], is_binary=True, is_spikes=_is_spikes)
         return self
 
+    def from_xml(self, record_filepath:str, event_key:str, target_values:dict, ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
+        """Instantiate an EventFrame from an XML annotation file (e.g. NSRR datasets).
+        The XML file is assumed to have a list of events at a certain depth level.
+        Each item in target_values will be treated separately so that the EventFrame will have an EventRecord for each key.
+        If only target values are passed as an argument, the EventRecord will contain observed target values as states.
+
+        Args:
+            record_filepath (str): Name of the file to be parsed
+            event_key (str): Which XML tag is associated to the type of event
+            target_values (dict): Mapping of the target values of interest
+            ts_key (str): Which XML tag is associated to the timing of the event
+            t0 (datetime): Initial timestamp
+            start_value (Any, optional): Initial value of the record. Defaults to None.
+            duration_key (str, optional): Which XML tag is associated to the timing of the event. Defaults to None -> spikes for binary events, automatically embedded for other events (e.g. sleep stages).
+            events_path (list, optional): How to reach the right depth in the XML. Defaults to [] -> root of the document.
+            ts_is_datetime (bool, optional): Flag if the ts column is absolute timestamps, or an increasing value from t0. Defaults to True.
+            ts_sampling (float, optional): Sampling interval if timestamps are relative. Defaults to 1.0 seconds.
+
+        Returns:
+            [EventFrame]: EventFrame instance
+        """
+        self.start_date = t0
+        for key, val in target_values.items():
+            self[key] = EventRecord().from_xml(record_filepath, key, event_key, val, ts_key, t0, start_value, duration_key, events_path, ts_is_datetime, ts_sampling)
+        return self
+
     def from_wfdb_annotation(self, record_filepath:str, target_values:dict, t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
-        """Instantiate an EventRecord from a Physionet WFDB annotation file.
+        """Instantiate an EventFrame from a Physionet WFDB annotation file.
         Each item in target_values will be treated separately so that the EventFrame will have an EventRecord for each key.
         If only target values are passed as an argument, the EventRecord will contain observed target values as states.
         If openclose is passed, a binary state will be ON if the annotation starts with the opening character, OFF if it ends with closing one. e.g. '(apnea'->1, 'apnea)'->0
