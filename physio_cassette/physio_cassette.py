@@ -14,6 +14,7 @@ Designed for physiological signals, but general enough to be used with any type 
 
 import csv
 import inspect
+import os
 import pickle
 import warnings
 from copy import copy
@@ -1167,7 +1168,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
 
         # Check if folder exists or create it
         if not Path(cache_folder).exists():
-            Path(cache_folder).mkdir()
+            os.makedirs(cache_folder)
 
         # Read data if not forced to call the function
         filepath = f"{cache_folder}/{filename}.{file_extension[cache_format]}"
