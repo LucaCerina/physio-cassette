@@ -21,6 +21,8 @@ from copy import copy
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from glob import glob
+from hashlib import blake2b
+from importlib.metadata import version
 from logging import warning
 from numbers import Number
 from operator import *
@@ -1141,6 +1143,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
     """Minimal wrapper to automatically manage cache of functions. Currently support pickle and matlab formats.
        BEWARE! Not all data formats may be supported correctly.
        Example call --> autocache(foo, 'test', 'test')(args)
+       Cached call is tested against existence of cache file and hashing of source + passed arguments (not cached)
 
     Args:
         func (Callable): function to be called.
@@ -1158,14 +1161,45 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         'pickle': 'pkl',
         'matlab': 'mat'
     }
+
+    def func_ref() -> str:
+        """Get function name with package and version
+
+        Returns:
+            str: package(version).func_name string
+        """
+        module = inspect.getmodule(func)
+        module_name = module.__name__
+        module_version = version(module.__package__.split('.')[0])
+        func_name = func.__qualname__
+        return f"{module_name}({module_version}).{func_name}"
+    
+    # Code hasher
+    def hash(source:str, args_data:Any, kwargs_data:Any) -> str:
+        """Hash function and arguments to check if they changed from cached version
+
+        Args:
+            source (str): result of inspect.getsource
+            args_data (Any): positional arguments
+            kwargs_data (Any): keyword arguments
+
+        Returns:
+            str: hash result
+        """
+        hasher = blake2b(digest_size=32)
+        hasher.update(source.encode('utf-8'))
+        hasher.update(str([x.__repr__() for x in args_data]).encode('utf-8'))
+        hasher.update(str(kwargs_data).encode('utf-8'))
+        return hasher.hexdigest()
+
     # Function wrapper
     def wrap(*args, **kwargs):
         # Assert cache format
         assert cache_format in ['pickle', 'matlab'], "Invalid cache format. Valid options are 'pickle' or 'matlab'"
 
-        # Get function doc for later interpretability
-        func_doc = inspect.getdoc(func)
-
+        # Get function reference and hash for later interpretability
+        func_reference = func_ref()
+        hashed_call = hash(inspect.getsource(func), args, kwargs) 
         # Check if folder exists or create it
         if not Path(cache_folder).exists():
             os.makedirs(cache_folder)
@@ -1175,18 +1209,21 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         if (not force) and Path(filepath).exists():
             if cache_format == 'pickle':
                 with open(filepath, "rb") as openfile:
-                    data = pickle.load(openfile)['data']
+                    loaded_data = pickle.load(openfile)
             elif cache_format == 'matlab':
-                data = read_mat(filepath)['data']
+                loaded_data = read_mat(filepath)
+            data = loaded_data['data']
+            loaded_hash = loaded_data['hash']
 
-            # No transformation on data if the information is not available
-            return data
+            # Return data if it was produced by the same function (source+arguments)
+            if loaded_hash == hashed_call:
+                return data
 
         # Call function
         output = func(*args, **kwargs)
 
         # Save data in cache
-        save_obj = {'data': output, 'doc':func_doc}
+        save_obj = {'data': output, 'ref':func_reference, 'hash':hashed_call}
         if cache_format == 'pickle':
             with open(filepath, "wb") as openfile:
                 pickle.dump(save_obj, openfile, protocol=pickle.HIGHEST_PROTOCOL)
