@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, List, Tuple, Union
 
 import numpy as np
+import openpyxl_dictreader
 import pyedflib as edf
 import wfdb
 import xmltodict
@@ -701,7 +702,7 @@ class EventRecord:
         return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value).__post_init_checks()
 
     def from_csv(self, record_filepath:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=',', skiprows:int=0, **kwargs):
-        r"""Instantiate an EventRecord from a CSV file
+        r"""Instantiate an EventRecord from a CSV file any column-like file (e.g. Excel files with header)
 
         Args:
             record_filepath (str): name of the file to be parsed
@@ -721,6 +722,9 @@ class EventRecord:
         """
         assert skiprows>=0, "Skiprows argument should be positive"
 
+        # Detect file type
+        file_type = Path(record_filepath).suffix[1:]
+
         # Fill values
         data = TimeSeries()      
         self.start_time = t0
@@ -728,11 +732,12 @@ class EventRecord:
         if ts_column is None and ts_sampling == 0:
             raise(ValueError("if ts_column is None a valid ts_sampling in seconds should be passed to the function"))
 
+        event_filter = lambda x: event_column in x
         with open(record_filepath, 'r') as csv_file:
-            for _ in range(skiprows):
+            for _ in range(skiprows*int(file_type=='csv')):
                 csv_file.readline()
-            reader = csv.DictReader(csv_file, delimiter=delimiter)
-            for row in reader:
+            reader = csv.DictReader(csv_file, delimiter=delimiter) if file_type=='csv' else openpyxl_dictreader.DictReader(record_filepath)
+            for row in filter(event_filter, reader):
                 value = row[event_column]
                 ts = parse_timestamp(row[ts_column], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
                 data[ts] = value
@@ -988,7 +993,7 @@ class EventFrame(DataHolder):
         super(EventFrame, self).__init__(*arg, **kw)
 
     def from_csv(self, record_filepath:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=',', skiprows:int=0, **kwargs):
-        r"""Instantiate an EventFrame from a CSV file, recording certain labels separately
+        r"""Instantiate an EventFrame from a CSV file or any column-like file (e.g. Excel files with header), recording certain labels separately
 
         Args:
             record_filepath (str): name of the file to be parsed
@@ -1007,17 +1012,21 @@ class EventFrame(DataHolder):
         """
         assert skiprows>=0, "Skiprows argument should be positive"
 
+        # Detect file type
+        file_type = Path(record_filepath).suffix[1:]
+
         self.start_date = start_time
         # Allocate temporary dictionary
         temp_dict = {}
         for label in labels:
             temp_dict[label] = {'ts':[], 'dur':[]}
         # Parse CSV file
+        event_filter = lambda x: event_column in x
         with open(record_filepath, 'r') as csv_file:
-            for _ in range(skiprows):
+            for _ in range(skiprows*int(file_type=='csv')):
                 csv_file.readline()
-            reader = csv.DictReader(csv_file, delimiter=delimiter)
-            for row in reader:
+            reader = csv.DictReader(csv_file, delimiter=delimiter) if file_type=='csv' else openpyxl_dictreader.DictReader(record_filepath)
+            for row in filter(event_filter, reader):
                 if any([re.search(x, row[event_column]) for x in labels]):
                     key = row[event_column]
                     # Add key in temp_dict if not present

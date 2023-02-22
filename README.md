@@ -21,7 +21,7 @@ Physio Cassette is just that: Numpy arrays and dictionaries with flair. Physio C
 Physio-cassette aims to support seamlessly different file and data formats.
 XML format is currently based on NSRR interpretation of data annotations.
 Some functionalities will be added in the future. Other format specific features (e.g. physical/digital ranges in EDF and WFDB) are absent on purpose
-| Structure   | Numpy arrays       | CSV files          | Matlab files                       | EDF files          | Physionet WFDB     | XML                |
+| Structure   | Numpy arrays       | CSV/columnar files | Matlab files                       | EDF files          | Physionet WFDB     | XML                |
 |-------------|--------------------|--------------------|------------------------------------|--------------------|--------------------|--------------------|
 | Signal      | :heavy_check_mark: |                    | :heavy_check_mark:                 | (use SignalFrame)  | (use SignalFrame)  |                    |
 | SignalFrame | :heavy_check_mark: |                    | :heavy_check_mark: (1 file/signal) | :heavy_check_mark: | :heavy_check_mark: |                    |
@@ -50,6 +50,7 @@ $ pip install physio_cassette
 - Numpy
 - Scipy (Matlab IO)
 - [traces](https://github.com/datascopeanalytics/traces)
+- [openpyxl-dictreader](https://pypi.org/project/openpyxl-dictreader/) (excel files IO)
 - [pyedflib](https://github.com/holgern/pyedflib)
 - [pymatreader](https://pypi.org/project/pymatreader/)
 - [dateutil](https://pypi.org/project/python-dateutil/)

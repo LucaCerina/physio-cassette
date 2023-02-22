@@ -19,6 +19,8 @@ classifiers = [
 keywords = ['data storage', 'physiological signals', 'event records']
 dependencies = [
     "numpy>1.20",
+    "openpyxl>=3.0.3",
+    "openpyxl-dictreader>=0.1.9",
     "pyedflib>=0.1.28",
     "pymatreader",
     "python-dateutil>=2.8.2",
