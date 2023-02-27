@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import re
 
 # -*- coding: utf-8 -*-
@@ -22,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from glob import glob
 from hashlib import blake2b
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from logging import warning
 from numbers import Number
 from operator import *
@@ -216,6 +217,9 @@ class Signal:
 
     def __len__(self):
         return len(self.data)
+    
+    def __repr__(self):
+        return f"Signal: {self.data.__repr__()}, fs={self.fs}, start_time={self.start_time.isoformat()}"
 
     def __unary_op__(self:Signal, other:Union[int, float, np.ndarray, Signal], op:function) -> Signal:
         """Apply a unary operation, accounting for edge cases
@@ -597,6 +601,9 @@ class EventRecord:
             tstart = indexes.start if indexes.start is not None else self.data.first_key()
             tend = indexes.stop if indexes.stop is not None else self.data.last_key()
         return EventRecord(label=self.label, start_time=tstart, data=self.data.slice(tstart, tend), is_binary=self.is_binary, start_value=self.start_value)
+
+    def __repr__(self):
+        return f"EventRecord: {'spiking,' if self.is_spikes else ''}{'binary,' if self.is_binary else ''}, data {self.data.__repr__()}, start_time {self.start_time}"
 
     def from_logical_array(self, label:str, t0:datetime, input_array:np.ndarray, fs:float=1):
         """Create an EventRecord from a logical array representing state changes
@@ -1168,10 +1175,20 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         Returns:
             str: package(version).func_name string
         """
-        module = inspect.getmodule(func)
-        module_name = module.__name__
-        module_version = version(module.__package__.split('.')[0])
-        func_name = func.__qualname__
+        try:
+            module = inspect.getmodule(func)
+            module_name = module.__name__
+        except TypeError:
+            module = func.__module__
+            module_name = func.__module__
+        try:
+            module_version = version(module.__package__.split('.')[0])
+        except PackageNotFoundError:
+            module_version = 'v0.0.0'
+        try:
+            func_name = func.__qualname__
+        except AttributeError:
+            func_name = func.__class__.__name__
         return f"{module_name}({module_version}).{func_name}"
     
     # Code hasher
@@ -1199,7 +1216,12 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
 
         # Get function reference and hash for later interpretability
         func_reference = func_ref()
-        hashed_call = hash(inspect.getsource(func), args, kwargs) 
+        try:
+            source = inspect.getsource(func)
+        except TypeError:
+            cls = getattr(importlib.import_module(func.__module__), func.__class__.__name__)
+            source = inspect.getsource(cls)
+        hashed_call = hash(source, args, kwargs) 
         # Check if folder exists or create it
         if not Path(cache_folder).exists():
             os.makedirs(cache_folder)
