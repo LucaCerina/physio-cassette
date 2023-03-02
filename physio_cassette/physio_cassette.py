@@ -1192,11 +1192,12 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         return f"{module_name}({module_version}).{func_name}"
     
     # Code hasher
-    def hash(source:str, args_data:Any, kwargs_data:Any) -> str:
+    def hash(source:str, vars_data:dict, args_data:Any, kwargs_data:Any) -> str:
         """Hash function and arguments to check if they changed from cached version
 
         Args:
             source (str): result of inspect.getsource
+            vars_data (dict): variables of the class (e.g. __init__ variables not passed to caller)
             args_data (Any): positional arguments
             kwargs_data (Any): keyword arguments
 
@@ -1205,6 +1206,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         """
         hasher = blake2b(digest_size=32)
         hasher.update(source.encode('utf-8'))
+        hasher.update(str([k+v.__repr__() for k,v in vars_data.items()]).encode('utf-8'))
         hasher.update(str([x.__repr__() for x in args_data]).encode('utf-8'))
         hasher.update(str(kwargs_data).encode('utf-8'))
         return hasher.hexdigest()
@@ -1221,7 +1223,8 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         except TypeError:
             cls = getattr(importlib.import_module(func.__module__), func.__class__.__name__)
             source = inspect.getsource(cls)
-        hashed_call = hash(source, args, kwargs) 
+        vars_data = func.__dict__ if hasattr(func, '__dict__') else {}
+        hashed_call = hash(source, vars_data, args, kwargs) 
         # Check if folder exists or create it
         if not Path(cache_folder).exists():
             os.makedirs(cache_folder)
