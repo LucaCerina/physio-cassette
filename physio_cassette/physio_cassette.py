@@ -918,24 +918,24 @@ class EventRecord:
             return output_record.as_array(sampling_period=sampling_period)
 
 
-    def remap(self, map:Union[dict, Callable]) -> None:
+    def remap(self, mapper:Union[dict, Callable]) -> None:
         """Update values of events inplace with a dictionary mapping or a function.
         Ignore values that are not in the dictionary mapping.
 
         Args:
-            map (Union[dict, Callable]): Mapping dictionary or Callable/lambda
+            mapper (Union[dict, Callable]): Mapping dictionary or Callable/lambda
 
         """
-        assert isinstance(map, dict) or isinstance(map, Callable), "Mapping should be a dict or a function"
-        if isinstance(map, dict):
+        assert isinstance(mapper, dict) or isinstance(mapper, Callable), "Mapping should be a dict or a function"
+        if isinstance(mapper, dict):
             for t, val in self.data:
-                new_val = map.get(val)
+                new_val = mapper.get(val)
                 self.data[t] = val if new_val is None else new_val
-            new_start_value = map.get(self.start_value)
+            new_start_value = mapper.get(self.start_value)
             self.start_value = self.start_value if new_start_value is None else new_start_value
         else:
-            self.data = self.data.operation(None, lambda x,y: map(x))
-            self.start_value = map(self.start_value)
+            self.data = self.data.operation(None, lambda x,y: mapper(x))
+            self.start_value = mapper(self.start_value)
 
     def binarize(self, key:str, compact:bool=True):
         """Remap helper, returns a binary EventRecord with only 1 where a key is present, 0 elsewhere
