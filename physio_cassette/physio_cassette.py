@@ -921,6 +921,7 @@ class EventRecord:
     def remap(self, mapper:Union[dict, Callable]) -> None:
         """Update values of events inplace with a dictionary mapping or a function.
         Ignore values that are not in the dictionary mapping.
+        NOTE casting is done on data to respect mapper keys' type. The casting may raise an error
 
         Args:
             mapper (Union[dict, Callable]): Mapping dictionary or Callable/lambda
@@ -928,8 +929,10 @@ class EventRecord:
         """
         assert isinstance(mapper, dict) or isinstance(mapper, Callable), "Mapping should be a dict or a function"
         if isinstance(mapper, dict):
+            # Cast data according to mapper keys' type
+            cast = list(map(type,mapper))[0]
             for t, val in self.data:
-                new_val = mapper.get(val)
+                new_val = mapper.get(cast(val))
                 self.data[t] = val if new_val is None else new_val
             new_start_value = mapper.get(self.start_value)
             self.start_value = self.start_value if new_start_value is None else new_start_value
