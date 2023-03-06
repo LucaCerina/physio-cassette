@@ -154,7 +154,6 @@ class Signal:
     tstamps: np.ndarray = None
 
     def __post_init__(self):
-        print(self.fs)
         assert self.fs>0 and ~np.isnan(self.fs), f"Sampling frequency should be positive and a valid number. Got {self.fs}"
         self.data = np.array(self.data) if self.data is not None else np.array([])
         self.tstamps = np.array(self.tstamps) if self.tstamps is not None else np.array([])
