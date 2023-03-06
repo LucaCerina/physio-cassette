@@ -149,11 +149,13 @@ class Signal:
     """
     label: str = ''
     data: np.ndarray = None
-    fs: float = np.nan
+    fs: float = 1.0
     start_time: datetime = datetime.fromtimestamp(0)
     tstamps: np.ndarray = None
 
     def __post_init__(self):
+        print(self.fs)
+        assert self.fs>0 and ~np.isnan(self.fs), f"Sampling frequency should be positive and a valid number. Got {self.fs}"
         self.data = np.array(self.data) if self.data is not None else np.array([])
         self.tstamps = np.array(self.tstamps) if self.tstamps is not None else np.array([])
 
