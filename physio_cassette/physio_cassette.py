@@ -261,6 +261,12 @@ class Signal:
 
     def __rmul__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, mul)
+    
+    def __truediv__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, truediv)
+    
+    def __rtruediv__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, truediv)
 
     def __add__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, add)
@@ -871,7 +877,7 @@ class EventRecord:
 
         # Assign values
         n_samples = int(np.floor((self.data.last_key() - self.start_time).total_seconds()/sampling_period)) if self.data.last_key()>self.start_time else 1
-        values = np.zeros((n_samples,))
+        values = np.zeros((n_samples,), dtype=type(self.data.first_value()))
         if self.is_spikes == False:
             # Regular data is resampled without binning
             sample_delta = timedelta(seconds=sampling_period)
