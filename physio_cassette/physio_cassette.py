@@ -643,30 +643,37 @@ class EventRecord:
 
         return self.from_ts_dur_array(label=label, t0=t0, ts_array=ts, duration_array=durations, is_binary=True, start_value=0)
 
-    def from_state_array(self, label:str, t0:datetime, input_array:Iterable, ts_sampling:float=1.0):
-        """Generate an EventRecord from an array of states, with a fixed sampling time in seconds.
+    def from_state_array(self, label:str, t0:datetime, input_array:Iterable, ts_array:Iterable=None, ts_sampling:float=1.0, compact:bool=False):
+        """Generate an EventRecord from an array of states, with a fixed sampling time in seconds or a timestamps array.
 
         Args:
             label (str): label of the data instance
             t0 (datetime): initial timestamp
             input_array (Iterable): list of events
+            ts_array (Iterable, optional): list of timestamps (seconds or datetime) for the events. Defaults to None -> Use fixed sampling
             ts_sampling (float, optional): Desired sampling time. Defaults to 1.0 seconds.
+            compact (bool, optional): Compact the output Timeseries or not. Defaults to False
 
         Returns:
             [self]: initialized EventRecord
         """
         if isinstance(input_array, np.ndarray):
             assert input_array.ndim==1, "EventRecord from_state_array accepts only 1D arrays"
+        
+        if ts_array is not None:
+            assert len(input_array)==len(ts_array), "Input and timestamps array should have the same length"
 
         if len(input_array)==0:
             warnings.warn("Empty input in EventRecord data")
             return self.from_ts_dur_array(label=label, t0=t0, ts_array=[], duration_array=[], is_binary=True, start_value=0)
 
+        get_ts = lambda i: t0 + timedelta(seconds=i*ts_sampling) if ts_array is None else (ts_array[i] if isinstance(ts_array[0], (datetime, np.datetime64)) else t0 + timedelta(seconds=ts_array[i]))
         data = TimeSeries()
         for i, val in enumerate(input_array):
-            ts = t0 + timedelta(seconds=i*ts_sampling)
+            ts = get_ts(i)
             data[ts] = val
-        data.compact()
+        if compact:
+            data.compact()
 
         return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=data[t0]).__post_init_checks()
 
