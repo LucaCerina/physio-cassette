@@ -165,7 +165,7 @@ class Signal:
             indexes (slice): example sig[1:1000]
             values (Union[np.ndarray, Number]): new values
         """
-        assert isinstance(indexes, slice) or (isinstance(indexes, np.ndarray) and np.issubdtype(indexes[0], np.bool_))
+        assert isinstance(indexes, slice) or (isinstance(indexes, np.ndarray) and np.issubdtype(indexes[0], (np.bool_, np.integer)))
         assert isinstance(values, np.ndarray) or isinstance(values, Number)
         self.data[indexes] = values
 
