@@ -1144,6 +1144,7 @@ class EventFrame(DataHolder):
 
         # Transform to EventRecord
         start_value = temp_series.first_value() if not temp_series.is_empty() else 0
+        start_value = start_value if start_value is not None else 0
         record = EventRecord(label=label, start_time=self.start_date, data=temp_series, start_value=start_value)
         record.is_binary = True if record.data.n_measurements()>1 and len(record.data.distribution().keys())<=2 else False
 
