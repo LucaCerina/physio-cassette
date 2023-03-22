@@ -889,7 +889,7 @@ class EventRecord:
         if self.is_spikes == False:
             # Regular data is resampled without binning
             sample_delta = timedelta(seconds=sampling_period)
-            values[0] = self.start_value
+            values[0] = self.data.first_value()
             for i in range(1, n_samples):
                 curr_t = self.start_time + timedelta(seconds=i*sampling_period)
                 if curr_t in self.data._d:
