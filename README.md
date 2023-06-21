@@ -11,6 +11,7 @@ Physio Cassette is just that: Numpy arrays and dictionaries with flair. Physio C
 ### Basic data structures
 - Signal: a numpy array with associated sampling frequency, timestamps and minor metadata. Zero-cost abstraction, the data can be accessed directly
 - EventRecord: a class for time annotated events based on [traces](https://github.com/datascopeanalytics/traces) TimeSeries with support for binary, trains, and multilevel events
+Signals can be iterated using EventRecord events as anchor points and viceversa Events can be converted to a sampled Signal
 
 ### Containers
 - DataHolder: your box of cables based on Python dictionary. Parent class of SignalFrame and EventFrame.

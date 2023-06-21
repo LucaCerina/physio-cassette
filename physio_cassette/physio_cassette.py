@@ -28,7 +28,7 @@ from logging import warning
 from numbers import Number
 from operator import *
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Tuple, Union
+from typing import Any, Callable, Iterable, Iterator, List, Tuple, Union
 
 import numpy as np
 import openpyxl_dictreader
@@ -201,6 +201,58 @@ class Signal:
             start_time=_start_time,
             tstamps=self.tstamps[_indexes] if self.tstamps is not None else self.tstamps
         )
+    
+    def sample_by_events(self, events:EventRecord, start_time:datetime=None, target_values:Any=None, window_length:Union[float, Tuple]=30, direction:str='both', ignore_first_event:bool=True) -> Iterator[Tuple[np.ndarray, Any, datetime, Tuple, Tuple]]:
+        """Iterate segments of a Signal using events in EventRecord as anchor points. Select events of interest and configure width of samples around the event.
+           Each sample returns the timing and value of the event, the distance with adjacent events (NaN for first and last event), and if adjacent events overlap with sample length
+
+        Args:
+            events (EventRecord): EventRecord to be iterated
+            start_time (datetime, optional): Override start time if signal and events are not aligned. Defaults to None.
+            target_values (Any, optional): Which target values in events should yield a sample. Defaults to None, all values are used.
+            window_length (Union[float, Tuple], optional): Length of the window to be used. Can be two values for asymmmetric windows. Defaults to 30s.
+            direction (str, optional): Direction of the samples, can be up to the event ('backward'), after it ('forward') or around it ('both'). Defaults to 'both'.
+            ignore_first_event (bool, optional): Ignore the first value, even if in target (e.g. binary records starting with 0). Defaults to True.
+
+        Yields:
+            np.ndarray: signal sample
+            Any: value of the event
+            datetime: datetime of the event
+            Tuple: distance with adjacent events
+            Tuple: True if adjacent events overlap with the window
+        """
+        # Asserts
+        assert isinstance(events, EventRecord), "The events keyword expects an EventRecord variable"
+        assert direction in ['both', 'backward', 'forward'], f"Valid sampling directions are 'both', 'backward', 'forward', got {direction}"
+        assert (start_time is not None) or (events.start_time==self.start_time), "Specify start time if the signal and events have different start times"
+        assert (isinstance(window_length, (float,int)) and window_length>0) or (isinstance(window_length, tuple) and len(window_length)==2 and all([x>0 for x in window_length])), "window_length accepts only one or two numbers, positive"
+        if (direction != 'both') and isinstance(window_length, tuple):
+            warnings.warn(f"Signal iterator of {self.label} with {events.label} has {direction} lookup, but window_length is {window_length}. Only one value will be used")
+        _start_time = self.start_time if start_time is None else start_time
+
+        # Event checker lambdas
+        is_target = lambda x: True if target_values is None else (x in target_values if isinstance(target_values, Iterable) else x==target_values)
+        event_distance = lambda i,j: (events.data.get_item_by_index(j)[0] - events.data.get_item_by_index(i)[0]).total_seconds()
+
+        # Sample spacing
+        _window_length = window_length if isinstance(window_length, tuple) else (window_length, window_length)
+        back_samples = int(self.fs*_window_length[0]) if direction in ['both', 'backward'] else 0
+        fwd_samples = int(self.fs*_window_length[1]) if direction in ['both', 'forward'] else 0
+
+        # Iterator
+        for i, (ts, val) in enumerate(events.data.items()):
+            if i==0 and ignore_first_event:
+                continue
+            if is_target(val):
+                # Slice block of the signal
+                event_sample = int((ts-_start_time).total_seconds()*self.fs)
+                signal_slice = slice(event_sample-back_samples, event_sample+fwd_samples)
+                # Distance with adjacent events
+                back_event_distance = event_distance(i-1, i) if i>0 else np.nan
+                fwd_event_distance = event_distance(i, i+1) if i+1<events.data.n_measurements() else np.nan
+                event_overlap = (back_event_distance<_window_length[0], fwd_event_distance<_window_length[1])
+                if signal_slice.start>=0 and signal_slice.stop<self.shape[0]:
+                    yield self[signal_slice], val, ts, (back_event_distance, fwd_event_distance), event_overlap
 
     def __getitem__(self, indexes):
         """Return only a data slice, without other Signal attributed attached
