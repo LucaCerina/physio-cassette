@@ -18,6 +18,7 @@ import inspect
 import os
 import pickle
 import warnings
+from collections import namedtuple
 from copy import copy
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -125,6 +126,15 @@ class DataHolder(dict):
         """
         return [*self]
 
+class SignalbyEvent(namedtuple('SignalbyEvent', ['data', 'value', 'timestamp', 'distance', 'overlap'])):
+    """An helper namedtuple class to manipulate Signal.sample_by_events return variable
+
+    """
+    __slots__ = ()
+
+    @property
+    def duration(self):
+        return self.distance[1]
 
 @dataclass(repr=False)
 class Signal:
@@ -226,8 +236,6 @@ class Signal:
         assert direction in ['both', 'backward', 'forward'], f"Valid sampling directions are 'both', 'backward', 'forward', got {direction}"
         assert (start_time is not None) or (events.start_time==self.start_time), "Specify start time if the signal and events have different start times"
         assert (isinstance(window_length, (float,int)) and window_length>0) or (isinstance(window_length, tuple) and len(window_length)==2 and all([x>0 for x in window_length])), "window_length accepts only one or two numbers, positive"
-        if (direction != 'both') and isinstance(window_length, tuple):
-            warnings.warn(f"Signal iterator of {self.label} with {events.label} has {direction} lookup, but window_length is {window_length}. Only one value will be used")
         _start_time = self.start_time if start_time is None else start_time
 
         # Event checker lambdas
@@ -252,7 +260,7 @@ class Signal:
                 fwd_event_distance = event_distance(i, i+1) if i+1<events.data.n_measurements() else np.nan
                 event_overlap = (back_event_distance<_window_length[0], fwd_event_distance<_window_length[1])
                 if signal_slice.start>=0 and signal_slice.stop<self.shape[0]:
-                    yield self[signal_slice], val, ts, (back_event_distance, fwd_event_distance), event_overlap
+                    yield SignalbyEvent(self[signal_slice], val, ts, (back_event_distance, fwd_event_distance), event_overlap)
 
     def __getitem__(self, indexes):
         """Return only a data slice, without other Signal attributed attached
