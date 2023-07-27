@@ -1263,7 +1263,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
             module_name = func.__module__
         try:
             module_version = version(module.__package__.split('.')[0])
-        except PackageNotFoundError:
+        except (PackageNotFoundError, AttributeError):
             module_version = 'v0.0.0'
         try:
             func_name = func.__qualname__
