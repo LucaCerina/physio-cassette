@@ -1071,9 +1071,9 @@ class EventFrame(DataHolder):
         start_date: datetime
             start datetime, considered equal for all EventRecords
         labels: list[str]
-            list of labels for all Signals
+            list of labels for all Records
         dict object: dict
-            Signals are stored as a dict with label:Signal format
+            Records are stored as a dict with label:Signal format
     """
     start_date = None
 
