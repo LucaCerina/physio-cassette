@@ -994,13 +994,14 @@ class EventRecord:
             return output_record.as_array(sampling_period=sampling_period)
 
 
-    def remap(self, mapper:Union[dict, Callable]) -> None:
+    def remap(self, mapper:Union[dict, Callable], default:Any=None) -> None:
         """Update values of events inplace with a dictionary mapping or a function.
-        Ignore values that are not in the dictionary mapping.
+        Ignore values that are not in the dictionary mapping or apply default value.
         NOTE casting is done on data to respect mapper keys' type. The casting may raise an error
 
         Args:
             mapper (Union[dict, Callable]): Mapping dictionary or Callable/lambda
+            default (Any, optional): Default value if a value is not available. Defaults to None.
 
         """
         assert isinstance(mapper, dict) or isinstance(mapper, Callable), "Mapping should be a dict or a function"
@@ -1008,7 +1009,7 @@ class EventRecord:
             # Cast data according to mapper keys' type
             cast = list(map(type,mapper))[0]
             for t, val in self.data:
-                new_val = mapper.get(cast(val))
+                new_val = mapper.get(cast(val), default)
                 self.data[t] = val if new_val is None else new_val
             new_start_value = mapper.get(self.start_value)
             self.start_value = self.start_value if new_start_value is None else new_start_value
@@ -1020,11 +1021,11 @@ class EventRecord:
         """Remap helper, returns a binary EventRecord with only 1 where a key is present, 0 elsewhere
 
         Args:
-            key (str): _description_
-            compact (bool, optional): _description_. Defaults to True.
+            key (str): key used as '1' value to binarize the record
+            compact (bool, optional): Remove repeated values. Defaults to True.
 
         Returns:
-            _type_: _description_
+            EventRecord: binarized EventRecord
         """
         assert type(key)==type(self.data.first_value()), f"Binarize key has type {type(key)}, but data is of type {type(self.data.first_value())}"
         output = copy(self)
