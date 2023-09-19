@@ -1201,7 +1201,7 @@ class EventFrame(DataHolder):
                 if val not in self.labels:
                     warnings.warn(f"Label {val} is not present in the EventFrame.")
         series = [x.data for x in self.values() if ((labels is None) or (x.label in labels))]
-        temp_series = TimeSeries.merge(series, operation= lambda x: int(any(x)))
+        temp_series = TimeSeries.merge(series, operation= lambda x: int(any(x))) if any([x.n_events>0 for x in self.values()]) else TimeSeries()
 
         # Transform to EventRecord
         start_value = temp_series.first_value() if not temp_series.is_empty() else 0
