@@ -668,7 +668,10 @@ class EventRecord:
             tstart = indexes.start if indexes.start is not None else self.data.first_key()
             tend = indexes.stop if indexes.stop is not None else self.data.last_key()
         return EventRecord(label=self.label, start_time=tstart, data=self.data.slice(tstart, tend), is_binary=self.is_binary, start_value=self.start_value)
-
+    
+    def __iter__(self):
+        return iter(self.data)
+    
     def __repr__(self):
         return f"EventRecord: {'spiking,' if self.is_spikes else ''}{'binary,' if self.is_binary else ''}, data {self.data.__repr__()}, start_time {self.start_time}"
 
