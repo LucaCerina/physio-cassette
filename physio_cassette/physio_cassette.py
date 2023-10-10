@@ -127,7 +127,7 @@ class DataHolder(dict):
         Returns:
             [list]: label of all the data in the DataHolder
         """
-        return [*self]
+        return [*self.keys()]
 
 class SignalbyEvent(namedtuple('SignalbyEvent', ['data', 'value', 'timestamp', 'distance', 'overlap'])):
     """An helper namedtuple class to manipulate Signal.sample_by_events return variable
