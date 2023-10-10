@@ -88,6 +88,9 @@ class DataHolder(dict):
     def __init__(self,*arg,**kw):
         super(DataHolder, self).__init__(*arg, **kw)
 
+    def __iter__(self) -> Iterator:
+        return super().items().__iter__()
+
     def relabel(self, mapper:dict):
         """Update labels
 
