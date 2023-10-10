@@ -706,7 +706,7 @@ class EventRecord:
 
         return self.from_ts_dur_array(label=label, t0=t0, ts_array=ts, duration_array=durations, is_binary=True, start_value=0)
 
-    def from_state_array(self, label:str, t0:datetime, input_array:Iterable, ts_array:Iterable=None, ts_sampling:float=1.0, compact:bool=False):
+    def from_state_array(self, label:str, t0:datetime, input_array:Iterable, ts_array:Iterable=None, ts_sampling:float=1.0, start_value:Any=None, compact:bool=False):
         """Generate an EventRecord from an array of states, with a fixed sampling time in seconds or a timestamps array.
 
         Args:
@@ -716,6 +716,7 @@ class EventRecord:
             ts_array (Iterable, optional): list of timestamps (seconds or datetime) for the events. Defaults to None -> Use fixed sampling
             ts_sampling (float, optional): Desired sampling time. Defaults to 1.0 seconds.
             compact (bool, optional): Compact the output Timeseries or not. Defaults to False
+            start_value (Any, optional): Initial value at t0. Defaults to None.
 
         Returns:
             [self]: initialized EventRecord
@@ -729,16 +730,28 @@ class EventRecord:
         if len(input_array)==0:
             warnings.warn("Empty input in EventRecord data")
             return self.from_ts_dur_array(label=label, t0=t0, ts_array=[], duration_array=[], is_binary=True, start_value=0)
+        
+        # Define if input is binary or spikes
+        unique_states = len(set(input_array))
+        _is_binary = unique_states==2 or (unique_states<2 and (start_value is not None and start_value!=input_array[0]))
+        _is_spikes = unique_states==1 
 
         get_ts = lambda i: t0 + timedelta(seconds=i*ts_sampling) if ts_array is None else (ts_array[i] if isinstance(ts_array[0], (datetime, np.datetime64)) else t0 + timedelta(seconds=ts_array[i]))
         data = TimeSeries()
+
+        # Assess initial value
+        if (start_value is not None and ts_array is not None) and t0!=ts_array[0]:
+            data[t0] = start_value
+
+        # Fill EventRecord
         for i, val in enumerate(input_array):
             ts = get_ts(i)
             data[ts] = val
         if compact:
             data.compact()
+        _start_value = data[t0]
 
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=data[t0]).__post_init_checks()
+        return EventRecord(label=label, start_time=t0, data=data, is_binary=_is_binary, is_spikes=_is_spikes, start_value=_start_value).__post_init_checks()
 
 
     def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray]=None, is_binary:bool=False, is_spikes:bool=False, start_value:Any=None):
