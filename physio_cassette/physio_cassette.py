@@ -784,7 +784,7 @@ class EventRecord:
 
         # Fill values
         data = TimeSeries()      
-        data[t0] = 0 if start_value is None else start_value
+        data[t0], start_value = (0,0) if start_value is None else (start_value, start_value)
         self.start_time = t0
 
         # Check for empty arrays
