@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physio_cassette"
-version = "0.1.15"
+version = "0.1.16"
 description = "Storage structures for signals (mostly physiological data), metadata and event annotations"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -26,6 +26,7 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "scipy>1.9",
     "traces>=0.5.1",
+    "wfdb>=4.1.2",
     "xmltodict>=0.13.0"
 ]
 

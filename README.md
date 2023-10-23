@@ -55,6 +55,7 @@ $ pip install physio_cassette
 - [pyedflib](https://github.com/holgern/pyedflib)
 - [pymatreader](https://pypi.org/project/pymatreader/)
 - [dateutil](https://pypi.org/project/python-dateutil/)
+- [wfdb](https://pypi.org/project/wfdb/)
 - [xmltodict](https://pypi.org/project/xmltodict/)
 
 
