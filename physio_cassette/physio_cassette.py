@@ -101,8 +101,8 @@ class XLSDictReader(object):
     """XLS file reader for old excel format compatibility. Based on https://gist.github.com/mdellavo/639082 and openpyxl_dictreader
     # TODO move it to an external dependency
     """
-    def __init__(self, filename:str, fieldnames:list=None) -> None:
-        self.wb = xlrd.open_workbook_xls(filename, formatting_info=True)
+    def __init__(self, filename:str, fieldnames:list=None, logfile:str=os.devnull) -> None:
+        self.wb = xlrd.open_workbook_xls(filename, formatting_info=True, logfile=open(logfile, 'w'))
         self.ws = self.wb.sheet_by_index(0)
         self.reader = self._reader(self.ws)
         self._fieldnames = fieldnames
@@ -136,6 +136,9 @@ class XLSDictReader(object):
             self.fieldnames
         row = next(self.reader)
         self.line_num += 1
+
+        while all(cell is None for cell in row):
+            row = next(self.reader)
 
         d = dict(zip(self.fieldnames, row))
         lf = len(self.fieldnames)
@@ -258,7 +261,7 @@ class Signal:
         """
         assert (indexes is not None) ^ ((stop is not None) or (start is not None and stop is not None)), "At least indexes, stop, or start and stop should be assigned, but not together"
         assert ~np.issubdtype(type(indexes), np.integer), "Please refrain from calling sub on a single value, use your_signal[idx] instead"
-        assert isinstance(indexes, slice) or (isinstance(indexes, Iterable) and len(indexes)<=3), "Invalid indexes, use slice object or a iterable with a maximum length of 3"
+        assert (indexes is None) or (isinstance(indexes, slice) or (isinstance(indexes, Iterable) and len(indexes)<=3)), "Invalid indexes, use slice object or a iterable with a maximum length of 3"
 
         # Define indexes
         if indexes is not None:
@@ -268,7 +271,7 @@ class Signal:
 
         # Check for start time slicing
         if reset_start_time:
-            _start_time = self.tstamps[_indexes.start] if self.tstamps is not None else self.start_time + timedelta(seconds=_indexes.start/self.fs)
+            _start_time = self.tstamps[_indexes.start] if ((self.tstamps is not None) and len(self.tstamps)) else self.start_time + timedelta(seconds=_indexes.start/self.fs)
         else:
             _start_time = self.start_time
 
