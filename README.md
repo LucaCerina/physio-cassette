@@ -52,6 +52,7 @@ $ pip install physio_cassette
 - Scipy (Matlab IO)
 - [traces](https://github.com/datascopeanalytics/traces)
 - [openpyxl-dictreader](https://pypi.org/project/openpyxl-dictreader/) (excel files IO)
+- [xlrd](https://pypi.org/project/xlrd/) (old excel format)
 - [pyedflib](https://github.com/holgern/pyedflib)
 - [pymatreader](https://pypi.org/project/pymatreader/)
 - [dateutil](https://pypi.org/project/python-dateutil/)

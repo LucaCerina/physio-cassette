@@ -33,6 +33,7 @@ from typing import Any, Callable, Iterable, Iterator, List, Tuple, Union
 
 import numpy as np
 import openpyxl_dictreader
+import xlrd
 import pyedflib as edf
 import wfdb
 import xmltodict
@@ -40,6 +41,17 @@ from dateutil import parser
 from pymatreader import read_mat
 from scipy.io import savemat
 from traces import TimeSeries
+
+__all__ = [
+    'XLSDictReader',
+    'DataHolder',
+    'SignalbyEvent',
+    'Signal',
+    'SignalFrame',
+    'EventRecord',
+    'EventFrame',
+    'autocache'
+]
 
 # Default matlab format for signals
 MATLAB_DEFAULT_SIGNAL_FORMAT = {
@@ -60,6 +72,9 @@ def parse_timestamp(timestamp:str, start_time:datetime) -> datetime:
     Returns:
         datetime: Parsed datetime
     """
+    if len(timestamp)<3:
+        # Unlikely to be any reasonable format
+        return None
     # Initial assumption is timestamp has ISO8601 format
     try:
         output = datetime.fromisoformat(timestamp)
@@ -81,6 +96,56 @@ def parse_timestamp(timestamp:str, start_time:datetime) -> datetime:
             output += timedelta(days=1)
 
     return output
+
+class XLSDictReader(object):
+    """XLS file reader for old excel format compatibility. Based on https://gist.github.com/mdellavo/639082 and openpyxl_dictreader
+    # TODO move it to an external dependency
+    """
+    def __init__(self, filename:str, fieldnames:list=None) -> None:
+        self.wb = xlrd.open_workbook_xls(filename, formatting_info=True)
+        self.ws = self.wb.sheet_by_index(0)
+        self.reader = self._reader(self.ws)
+        self._fieldnames = fieldnames
+        self.line_num = 0
+
+    def _reader(self, iterator):
+        cvalue = lambda x: x.value if x.ctype != 3 else xlrd.xldate_as_datetime(x.value,0).isoformat()
+        total = [[cvalue(col) for col in row] for row in iterator]
+        for row in total:
+            yield row
+
+    @property
+    def fieldnames(self):
+        if self._fieldnames is None:
+            try:
+                self._fieldnames = next(self.reader)
+            except StopIteration:
+                pass
+        self.line_num += 1
+        return self._fieldnames
+
+    @fieldnames.setter
+    def fieldnames(self, value):
+        self._fieldnames = value
+
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        if self.line_num == 0:
+            self.fieldnames
+        row = next(self.reader)
+        self.line_num += 1
+
+        d = dict(zip(self.fieldnames, row))
+        lf = len(self.fieldnames)
+        lr = len(row)
+        if lf < lr:
+            d[self.restkey] = row[lf:]
+        elif lf > lr:
+            for key in self.fieldnames[lr:]:
+                d[key] = self.restval
+        return d
 
 class DataHolder(dict):
     """Minor abstraction over dict class to hold information together and check labels
@@ -839,11 +904,19 @@ class EventRecord:
         with open(record_filepath, 'r') as csv_file:
             for _ in range(skiprows*int(file_type=='csv')):
                 csv_file.readline()
-            reader = csv.DictReader(csv_file, delimiter=delimiter) if file_type=='csv' else openpyxl_dictreader.DictReader(record_filepath)
+            # Select reader based on format
+            if file_type == 'csv':
+                reader = csv.DictReader(csv_file, delimiter=delimiter) 
+            elif file_type=='xls':
+                reader = XLSDictReader(record_filepath)
+            else:            
+                reader = openpyxl_dictreader.DictReader(record_filepath)
+            # Parse rows
             for row in filter(event_filter, reader):
                 value = row[event_column]
                 ts = parse_timestamp(row[ts_column], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
-                data[ts] = value
+                if ts is not None:
+                    data[ts] = value
         return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value).__post_init_checks()
 
     def from_xml(self, record_filepath:str, label:str, event_key:str, target_values:Union[str,list], ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
@@ -1134,7 +1207,14 @@ class EventFrame(DataHolder):
         with open(record_filepath, 'r') as csv_file:
             for _ in range(skiprows*int(file_type=='csv')):
                 csv_file.readline()
-            reader = csv.DictReader(csv_file, delimiter=delimiter) if file_type=='csv' else openpyxl_dictreader.DictReader(record_filepath)
+            # Select reader based on format
+            if file_type == 'csv':
+                reader = csv.DictReader(csv_file, delimiter=delimiter) 
+            elif file_type=='xls':
+                reader = XLSDictReader(record_filepath)
+            else:            
+                reader = openpyxl_dictreader.DictReader(record_filepath)
+            # Parse rows
             for row in filter(event_filter, reader):
                 if any([re.search(x, row[event_column]) for x in labels]):
                     key = row[event_column]
@@ -1143,10 +1223,11 @@ class EventFrame(DataHolder):
                         temp_dict[key] = {'ts':[], 'dur':[]}
                     # Extract timestamps and duration
                     ts = parse_timestamp(row[ts_column], self.start_date) if ts_is_datetime else float(row[ts_column])
-                    temp_dict[key]['ts'].append(ts)
-                    if duration_column is not None:
-                        dur = float(row[duration_column])
-                        temp_dict[key]['dur'].append(dur)
+                    if ts is not None:
+                        temp_dict[key]['ts'].append(ts)
+                        if duration_column is not None:
+                            dur = float(row[duration_column])
+                            temp_dict[key]['dur'].append(dur)
         # Allocate the frames
         for key, data in temp_dict.items():
             _is_spikes = len(data['dur']) == 0

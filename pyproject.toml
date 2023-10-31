@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physio_cassette"
-version = "0.1.16"
+version = "0.1.17"
 description = "Storage structures for signals (mostly physiological data), metadata and event annotations"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -21,6 +21,7 @@ dependencies = [
     "numpy>1.20",
     "openpyxl>=3.0.3",
     "openpyxl-dictreader>=0.1.9",
+    "xlrd>=2.0.1",
     "pyedflib>=0.1.28",
     "pymatreader",
     "python-dateutil>=2.8.2",
