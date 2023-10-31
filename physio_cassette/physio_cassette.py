@@ -514,7 +514,7 @@ class SignalFrame(DataHolder):
 
         self.__init__()
         # Read edf file
-        signals, signal_headers, header = edf.highlevel.read_edf(record_filepath)
+        signals, signal_headers, header = edf.highlevel.read_edf(record_filepath, ch_names=signal_names)
         self.start_date = header['startdate']
         for sig_header, signal in zip(signal_headers, signals):
             label = sig_header['label']
