@@ -40,6 +40,11 @@ class TestTimestampParser:
     def test_currently_unsupported(self):
         start_date = datetime(2000,1,1)
         true_date = datetime(2000,1,1,8,21,0)
-        test_date = "8:21:00AM"
+        test_date = "some time in the morning"
         with pytest.raises(ValueError):
             parsed_date = parse_timestamp(test_date, start_date)
+
+    def test_short_string(self):
+        start_date = datetime(2000,1,1)
+        parsed_date = parse_timestamp("", start_date)
+        assert parsed_date is None

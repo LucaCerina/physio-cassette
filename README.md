@@ -60,7 +60,9 @@ $ pip install physio_cassette
 - [xmltodict](https://pypi.org/project/xmltodict/)
 
 
-#### Contribution
+#### Contributing
+Looking for people more experienced in writing unit tests and overall beta-testers to help with the reliability of the library
+
 If you feel generous and this library helped your project:
 
 [![Buy me a coffee][buymeacoffee-shield]][buymeacoffee]

@@ -5,7 +5,7 @@ import re
 
 # -*- coding: utf-8 -*-
 __author__      = "Luca Cerina"
-__copyright__   = "Copyright 2022, Luca Cerina"
+__copyright__   = "Copyright 2023, Luca Cerina"
 __email__       = "lccerina@gmail.com"
 
 """
@@ -25,7 +25,6 @@ from datetime import datetime, timedelta
 from glob import glob
 from hashlib import blake2b
 from importlib.metadata import PackageNotFoundError, version
-from logging import warning
 from numbers import Number
 from operator import *
 from pathlib import Path
@@ -33,9 +32,9 @@ from typing import Any, Callable, Iterable, Iterator, List, Tuple, Union
 
 import numpy as np
 import openpyxl_dictreader
-import xlrd
 import pyedflib as edf
 import wfdb
+import xlrd
 import xmltodict
 from dateutil import parser
 from pymatreader import read_mat
@@ -82,7 +81,7 @@ def parse_timestamp(timestamp:str, start_time:datetime) -> datetime:
         if len(timestamp)>10:
             try:
                 output = parser.parse(timestamp, fuzzy=True)
-            except ValueError:
+            except Exception:
                 # TODO extend functionalities to support other formats
                 raise ValueError("Unsupported data format. Update your data")
         else:
@@ -259,7 +258,7 @@ class Signal:
         Returns:
             [Signal]: sliced signal
         """
-        assert (indexes is not None) ^ ((stop is not None) or (start is not None and stop is not None)), "At least indexes, stop, or start and stop should be assigned, but not together"
+        assert ((stop is not None) or (start is not None)) ^ (indexes is not None), "At least indexes, stop, or start and stop should be assigned, but not together"
         assert ~np.issubdtype(type(indexes), np.integer), "Please refrain from calling sub on a single value, use your_signal[idx] instead"
         assert (indexes is None) or (isinstance(indexes, slice) or (isinstance(indexes, Iterable) and len(indexes)<=3)), "Invalid indexes, use slice object or a iterable with a maximum length of 3"
 
@@ -480,7 +479,8 @@ class Signal:
         
         return start_time, self_slice, other_slice
 
-    def from_mat_file(self, mat_filename:str, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S") -> Tuple[Any, str]:
+    @classmethod
+    def from_mat_file(cls, mat_filename:str, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S") -> Tuple[Any, str]:
         """Load a Signal from formatted matlab file containing the data, start date and time, and sampling rate.
 
         Args:
@@ -503,7 +503,7 @@ class Signal:
             assert data_format['start_date'] in raw_mat.keys(), "start date missing in Mat data file"
             assert data_format['start_time'] in raw_mat.keys(), "start time missing in Mat data file"
         except (ValueError, AssertionError) as e:
-            warning(f"{e} {mat_filename}")
+            warnings.warn(f"{e} {mat_filename}")
             return None, label
 
         start_time = datetime.strptime(f"{raw_mat[data_format['start_date']]}-{raw_mat[data_format['start_time']]}", time_format)
@@ -548,10 +548,12 @@ class SignalFrame(DataHolder):
     """
     start_date = None
 
-    def __init__(self,*arg,**kw):
-        super(SignalFrame, self).__init__(*arg, **kw)
+    def __init__(self, *args, **kwargs):
+        self.start_date = kwargs.pop('start_date', None)
+        super(SignalFrame, self).__init__(*args, **kwargs)
 
-    def from_arrays(self, labels:Iterable, signals:Iterable, samplings:Iterable, start_time:datetime=datetime.fromtimestamp(0)):
+    @classmethod
+    def from_arrays(cls, labels:Iterable, signals:Iterable, samplings:Iterable, start_time:datetime=datetime.fromtimestamp(0)):
         """Generate a SignalFrame from multiple arrays
 
         Args:
@@ -563,13 +565,13 @@ class SignalFrame(DataHolder):
         Returns:
             [self]: initialized SignalFrame
         """
-        self.__init__()
-        self.start_date = start_time
+        output = cls(start_date=start_time)
         for label, signal, fs in zip(labels,signals,samplings):
-            self[label] = Signal(label=label, data=signal, fs=fs)
-        return self
+            output[label] = Signal(label=label, data=signal, fs=fs)
+        return output
     
-    def from_edf_file(self, record_filepath:str, signal_names:Union[str,list]=None):
+    @classmethod
+    def from_edf_file(cls, record_filepath:str, signal_names:Union[str,list]=None):
         """Generate a SignalFrame from a single EDF/BDF file
 
         Args:
@@ -580,17 +582,17 @@ class SignalFrame(DataHolder):
             [self]: initialized SignalFrame
         """
 
-        self.__init__()
         # Read edf file
         signals, signal_headers, header = edf.highlevel.read_edf(record_filepath, ch_names=signal_names)
-        self.start_date = header['startdate']
+        output = cls(start_date = header['startdate'])
         for sig_header, signal in zip(signal_headers, signals):
             label = sig_header['label']
             if (signal_names is None) or (label in signal_names):
-                self[label] = Signal(label=label, data=signal, fs=sig_header['sample_rate'], start_time=self.start_date)
-        return self
+                output[label] = Signal(label=label, data=signal, fs=sig_header['sample_rate'], start_time=output.start_date)
+        return output
 
-    def from_wfdb_record(self, record_filepath:str, signal_names:Union[str,list]=None):
+    @classmethod
+    def from_wfdb_record(cls, record_filepath:str, signal_names:Union[str,list]=None):
         """Generate a SignalFrame from a Physionet WFDB record
 
         Args:
@@ -600,26 +602,26 @@ class SignalFrame(DataHolder):
         Returns:
             [self]: initialized SignalFrame
         """
-        self.__init__()
         # Read header
         header = wfdb.rdheader(record_filepath)
         fs = header.fs
         channels = header.sig_name
         start_time = header.base_datetime if header.base_datetime is not None else datetime.fromtimestamp(0)
-        self.start_date = start_time
+        output = cls(start_date = start_time)
         # Select channels to be read
         channels_list = channels if signal_names is None else list(set(channels).intersection(set(signal_names)))
         if len(channels_list)==0:
             warnings.warn(f"Selected channels {signal_names} are not available in set {channels}. Returning empty frame!")
-            return self
+            return output
 
         # Read record
         record = wfdb.rdrecord(record_filepath, channel_names=channels_list)
         for i, ch in enumerate(channels_list):
-            self[ch] = Signal(label=ch, data=record.p_signal[:,i], fs=fs, start_time=start_time)
-        return self
+            output[ch] = Signal(label=ch, data=record.p_signal[:,i], fs=fs, start_time=start_time)
+        return output
 
-    def from_mat_folder(self, folder:str, signal_names:Union[str,list]=None, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S"):
+    @classmethod
+    def from_mat_folder(cls, folder:str, signal_names:Union[str,list]=None, data_format:dict=MATLAB_DEFAULT_SIGNAL_FORMAT, time_format:str="%d/%m/%Y-%H:%M:%S"):
         """Generate a SignalFrame from a folder of matlab files, according to a certain format
 
         Args:
@@ -631,18 +633,18 @@ class SignalFrame(DataHolder):
         Returns:
             [self]: initialized SignalFrame
         """
-        self.__init__()
+        output = cls()
         filenames = glob(folder+'/*.mat')
         for filename in filenames:
             label = Path(filename).stem
             if (signal_names is None) or (label in signal_names):
-                signal, label = Signal().from_mat_file(mat_filename=filename, data_format=data_format, time_format=time_format)
+                signal, label = Signal.from_mat_file(mat_filename=filename, data_format=data_format, time_format=time_format)
                 if signal:
-                    self[label] = signal
+                    output[label] = signal
                     # Start date is assumed to be common for all signals, otherwise consider the oldest one
-                    if (self.start_date is None) or (signal.start_time < self.start_date): 
-                        self.start_date = signal.start_time
-        return self
+                    if (output.start_date is None) or (signal.start_time < output.start_date): 
+                        output.start_date = signal.start_time
+        return output
 
 @dataclass
 class EventRecord:
@@ -669,7 +671,7 @@ class EventRecord:
     is_spikes: bool = False
     start_value: Any = None
 
-    def __post_init_checks(self):
+    def __post_init__(self):
         """Assign start value if not present already. Allow for other future checks
 
         Returns:
@@ -746,7 +748,8 @@ class EventRecord:
     def __repr__(self):
         return f"EventRecord: {'spiking,' if self.is_spikes else ''}{'binary,' if self.is_binary else ''}, data {self.data.__repr__()}, start_time {self.start_time}"
 
-    def from_logical_array(self, label:str, t0:datetime, input_array:np.ndarray, fs:float=1):
+    @classmethod
+    def from_logical_array(cls, label:str, t0:datetime, input_array:np.ndarray, fs:float=1):
         """Create an EventRecord from a logical array representing state changes
 
         Args:
@@ -759,7 +762,7 @@ class EventRecord:
             EventRecord: output EventRecord
         """
         if np.sum(input_array)<1 or np.sum(input_array)>=input_array.shape[0]:
-            return self.from_ts_dur_array(label=label, t0=t0, ts_array=[], duration_array=[], is_binary=True, start_value=0)
+            return cls.from_ts_dur_array(label=label, t0=t0, ts_array=[], duration_array=[], is_binary=True, start_value=0)
 
         # Convert to integer array
         int_array = np.clip(input_array, 0, 1) if not np.issubdtype(input_array.dtype, bool) else input_array.astype(int)
@@ -775,9 +778,10 @@ class EventRecord:
         durations = (ends - starts)/fs
         ts = starts/fs
 
-        return self.from_ts_dur_array(label=label, t0=t0, ts_array=ts, duration_array=durations, is_binary=True, start_value=0)
+        return cls.from_ts_dur_array(label=label, t0=t0, ts_array=ts, duration_array=durations, is_binary=True, start_value=0)
 
-    def from_state_array(self, label:str, t0:datetime, input_array:Iterable, ts_array:Iterable=None, ts_sampling:float=1.0, start_value:Any=None, compact:bool=False):
+    @classmethod
+    def from_state_array(cls, label:str, t0:datetime, input_array:Iterable, ts_array:Iterable=None, ts_sampling:float=1.0, start_value:Any=None, compact:bool=False):
         """Generate an EventRecord from an array of states, with a fixed sampling time in seconds or a timestamps array.
 
         Args:
@@ -800,7 +804,7 @@ class EventRecord:
 
         if len(input_array)==0:
             warnings.warn("Empty input in EventRecord data")
-            return self.from_ts_dur_array(label=label, t0=t0, ts_array=[], duration_array=[], is_binary=True, start_value=0)
+            return cls.from_ts_dur_array(label=label, t0=t0, ts_array=[], duration_array=[], is_binary=True, start_value=0)
         
         # Define if input is binary or spikes
         unique_states = len(set(input_array))
@@ -822,10 +826,10 @@ class EventRecord:
             data.compact()
         _start_value = data[t0]
 
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=_is_binary, is_spikes=_is_spikes, start_value=_start_value).__post_init_checks()
+        return cls(label=label, start_time=t0, data=data, is_binary=_is_binary, is_spikes=_is_spikes, start_value=_start_value)
 
-
-    def from_ts_dur_array(self, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray]=None, is_binary:bool=False, is_spikes:bool=False, start_value:Any=None):
+    @classmethod
+    def from_ts_dur_array(cls, label:str, t0:datetime, ts_array:Union[list, np.ndarray], duration_array:Union[list, np.ndarray]=None, is_binary:bool=False, is_spikes:bool=False, start_value:Any=None):
         """Generate an EventRecord from two arrays, one with timestamps and one with duration of events. EventRecord may have binary values and a start_value
 
         Args:
@@ -853,27 +857,28 @@ class EventRecord:
         # Fill values
         data = TimeSeries()      
         data[t0], start_value = (0,0) if start_value is None else (start_value, start_value)
-        self.start_time = t0
+        start_time = t0
 
         # Check for empty arrays
         if _ts_array.size == 0:
-            return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
+            return cls(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
 
         # Timestamps are relative to start_time, assuming to be seconds
         rel_ts_flag = not isinstance(_ts_array[0], (datetime, np.datetime64))
         delta_dur_flag = isinstance(_duration_array[0], timedelta)
         for ts, dur in zip(_ts_array, _duration_array):
-            t_start = self.start_time + timedelta(seconds=ts) if rel_ts_flag else ts
+            t_start = start_time + timedelta(seconds=ts) if rel_ts_flag else ts
             data[t_start] = 1
             if isinstance(dur, timedelta) or ~np.isnan(dur):
                 dur_seconds = dur.total_seconds() if delta_dur_flag else dur
-                t_end = (self.start_time + timedelta(seconds=ts+dur_seconds)) if rel_ts_flag else (ts + timedelta(seconds=dur_seconds)) 
+                t_end = (start_time + timedelta(seconds=ts+dur_seconds)) if rel_ts_flag else (ts + timedelta(seconds=dur_seconds)) 
                 data[t_end] = 0
 
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value).__post_init_checks()
+        return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=_is_spikes, start_value=start_value)
 
-    def from_csv(self, record_filepath:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=',', skiprows:int=0, **kwargs):
-        r"""Instantiate an EventRecord from a CSV file any column-like file (e.g. Excel files with header)
+    @classmethod
+    def from_csv(cls, record_filepath:str, label:str, event_column:str, t0:datetime, start_value:Any=None, ts_column:str=None, ts_is_datetime:bool=True, ts_sampling:float=0,  delimiter:str=',', skiprows:int=0, **kwargs):
+        """Instantiate an EventRecord from a CSV file any column-like file (e.g. Excel files with header)
 
         Args:
             record_filepath (str): name of the file to be parsed
@@ -886,7 +891,7 @@ class EventRecord:
             ts_sampling (float, optional): sampling interval if timestamps are relative. Defaults to 0.
             delimiter (str, optional): CSV column delimiter. Defaults to ','.
             skiprows (int, optional): Skip a certain number of rows before the csv reader
-            \**kwargs: keywords arguments passed to csv reader (e.g. skiprows)
+            \\**kwargs: keywords arguments passed to csv reader (e.g. skiprows)
 
         Returns:
             [EventRecord]: EventRecord instance
@@ -898,7 +903,7 @@ class EventRecord:
 
         # Fill values
         data = TimeSeries()      
-        self.start_time = t0
+        start_time = t0
 
         if ts_column is None and ts_sampling == 0:
             raise(ValueError("if ts_column is None a valid ts_sampling in seconds should be passed to the function"))
@@ -917,12 +922,13 @@ class EventRecord:
             # Parse rows
             for row in filter(event_filter, reader):
                 value = row[event_column]
-                ts = parse_timestamp(row[ts_column], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
+                ts = parse_timestamp(row[ts_column], start_time) if ts_is_datetime else start_time + timedelta(seconds=(int(row[ts_column])-1)*ts_sampling)
                 if ts is not None:
                     data[ts] = value
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value).__post_init_checks()
+        return cls(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)
 
-    def from_xml(self, record_filepath:str, label:str, event_key:str, target_values:Union[str,list], ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
+    @classmethod
+    def from_xml(cls, record_filepath:str, label:str, event_key:str, target_values:Union[str,list], ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
         """Instantiate an EventRecord from a XML file. Assuming that a certain depth is represented as a list of annotated tags.
 
         Args:
@@ -946,7 +952,7 @@ class EventRecord:
         """
         # Fill values
         data = TimeSeries()
-        self.start_time = t0
+        start_time = t0
 
         # Load data
         with open(record_filepath, 'rb') as xml_file:
@@ -965,15 +971,15 @@ class EventRecord:
         for element in input_data:
             if element[event_key] in target_values:
                 value = 1 if is_binary else element[event_key]
-                ts = parse_timestamp(element[ts_key], self.start_time) if ts_is_datetime else self.start_time + timedelta(seconds=float(element[ts_key])*ts_sampling)
+                ts = parse_timestamp(element[ts_key], start_time) if ts_is_datetime else start_time + timedelta(seconds=float(element[ts_key])*ts_sampling)
                 data[ts] = value
                 if duration_key is not None and is_binary:
                     ts = ts + timedelta(seconds=float(element[duration_key])*ts_sampling)
                     data[ts] = 0
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
+        return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
                 
-
-    def from_wfdb_annotation(self, record_filepath:str, label:str, target_values:Union[str,list], t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
+    @classmethod
+    def from_wfdb_annotation(cls, record_filepath:str, label:str, target_values:Union[str,list], t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
         """Instantiate an EventRecord from a Physionet WFDB annotation file.
         If only target values are passed as an argument, the EventRecord will contain observed target values as states.
         If openclose is passed, a binary state will be ON if the annotation starts with the opening character, OFF if it ends with closing one. e.g. '(apnea'->1, 'apnea)'->0
@@ -1005,13 +1011,13 @@ class EventRecord:
         fs = record.fs
 
         data = TimeSeries()
-        self.start_time = t0
+        start_time = t0
 
         # Iter data
         for i in range(record.sample.shape[0]):
             # Check where the key is in the annotations
             ann_key = record.aux_note[i] if (len(record.symbol[i].strip())==0 or record.symbol[i]=='"') else record.symbol[i]
-            ts = self.start_time + timedelta(seconds=record.sample[i]/fs)
+            ts = start_time + timedelta(seconds=record.sample[i]/fs)
             if (openclose is None) and ann_key in target_values:
                 # Store states separately
                 data[ts] = ann_key
@@ -1021,7 +1027,7 @@ class EventRecord:
                     data[ts] = 1
                 elif ann_key.endswith(openclose[1]) and ann_key[:-1]==target_key:
                     data[ts] = 0
-        return EventRecord(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value).__post_init_checks()
+        return cls(label=label, start_time=t0, data=data, is_binary=is_binary, start_value=start_value)
 
     def as_array(self, sampling_period:float) -> Signal:
         """Return data as a regularly sampled array. Assign time bin in case of spike arrays.
@@ -1173,12 +1179,13 @@ class EventFrame(DataHolder):
     """
     start_date = None
 
-    def __init__(self,*arg,**kw):
-        self.start_date = kw.pop('start_date', None)
-        super(EventFrame, self).__init__(*arg, **kw)
+    def __init__(self, *args, **kwargs):
+        self.start_date = kwargs.pop('start_date', None)
+        super(EventFrame, self).__init__(*args, **kwargs)
 
-    def from_csv(self, record_filepath:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=',', skiprows:int=0, **kwargs):
-        r"""Instantiate an EventFrame from a CSV file or any column-like file (e.g. Excel files with header), recording certain labels separately
+    @classmethod
+    def from_csv(cls, record_filepath:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=',', skiprows:int=0, **kwargs):
+        """Instantiate an EventFrame from a CSV file or any column-like file (e.g. Excel files with header), recording certain labels separately
 
         Args:
             record_filepath (str): name of the file to be parsed
@@ -1190,7 +1197,7 @@ class EventFrame(DataHolder):
             ts_is_datetime (bool, optional): Flag to parse ts column as datetime and not t-t0. Defaults to False.
             delimiter (str, optional): CSV delimiter. Defaults to ','.
             skiprows (int, optional): Skip a certain number of rows before the csv reader
-            \**kwargs: keywords arguments passed to csv reader (e.g. skiprows)
+            \\**kwargs: keywords arguments passed to csv reader (e.g. skiprows)
 
         Returns:
             [EventFrame]: EventFrame instance
@@ -1200,7 +1207,7 @@ class EventFrame(DataHolder):
         # Detect file type
         file_type = Path(record_filepath).suffix[1:]
 
-        self.start_date = start_time
+        start_date = start_time
         # Allocate temporary dictionary
         temp_dict = {}
         for label in labels:
@@ -1225,19 +1232,21 @@ class EventFrame(DataHolder):
                     if key not in temp_dict:
                         temp_dict[key] = {'ts':[], 'dur':[]}
                     # Extract timestamps and duration
-                    ts = parse_timestamp(row[ts_column], self.start_date) if ts_is_datetime else float(row[ts_column])
+                    ts = parse_timestamp(row[ts_column], start_date) if ts_is_datetime else float(row[ts_column])
                     if ts is not None:
                         temp_dict[key]['ts'].append(ts)
                         if duration_column is not None:
                             dur = float(row[duration_column])
                             temp_dict[key]['dur'].append(dur)
         # Allocate the frames
+        output = cls(start_date=start_date)
         for key, data in temp_dict.items():
             _is_spikes = len(data['dur']) == 0
-            self[key] = EventRecord().from_ts_dur_array(label=key, t0=self.start_date, ts_array=data['ts'], duration_array=data['dur'], is_binary=True, is_spikes=_is_spikes)
-        return self
+            output[key] = EventRecord.from_ts_dur_array(label=key, t0=start_date, ts_array=data['ts'], duration_array=data['dur'], is_binary=True, is_spikes=_is_spikes)
+        return output
 
-    def from_xml(self, record_filepath:str, event_key:str, target_values:dict, ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
+    @classmethod
+    def from_xml(cls, record_filepath:str, event_key:str, target_values:dict, ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
         """Instantiate an EventFrame from an XML annotation file (e.g. NSRR datasets).
         The XML file is assumed to have a list of events at a certain depth level.
         Each item in target_values will be treated separately so that the EventFrame will have an EventRecord for each key.
@@ -1258,12 +1267,14 @@ class EventFrame(DataHolder):
         Returns:
             [EventFrame]: EventFrame instance
         """
-        self.start_date = t0
+        start_date = t0
+        output = cls(start_date=start_date)
         for key, val in target_values.items():
-            self[key] = EventRecord().from_xml(record_filepath, key, event_key, val, ts_key, t0, start_value, duration_key, events_path, ts_is_datetime, ts_sampling)
-        return self
+            output[key] = EventRecord.from_xml(record_filepath, key, event_key, val, ts_key, t0, start_value, duration_key, events_path, ts_is_datetime, ts_sampling)
+        return output
 
-    def from_wfdb_annotation(self, record_filepath:str, target_values:dict, t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
+    @classmethod
+    def from_wfdb_annotation(cls, record_filepath:str, target_values:dict, t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
         """Instantiate an EventFrame from a Physionet WFDB annotation file.
         Each item in target_values will be treated separately so that the EventFrame will have an EventRecord for each key.
         If only target values are passed as an argument, the EventRecord will contain observed target values as states.
@@ -1281,10 +1292,11 @@ class EventFrame(DataHolder):
         Returns:
             [EventFrame]: EventFrame instance
         """
-        self.start_date = t0
+        start_date = t0
+        output = cls(start_date = start_date)
         for key,val in target_values.items():
-            self[key] = EventRecord().from_wfdb_annotation(record_filepath, key, val, t0, start_value, extension, openclose)
-        return self
+            output[key] = EventRecord.from_wfdb_annotation(record_filepath, key, val, t0, start_value, extension, openclose)
+        return output
 
     def merged_data(self, label:str='merged events', labels:List[str]=None, as_signal:bool=False, sampling_period:float=1.0) -> Union[EventRecord, Signal]:
         """Merge the events together. TODO allow external function to be used instead of logical or
