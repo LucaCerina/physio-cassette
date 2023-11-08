@@ -740,7 +740,15 @@ class EventRecord:
         else:
             tstart = indexes.start if indexes.start is not None else self.data.first_key()
             tend = indexes.stop if indexes.stop is not None else self.data.last_key()
-        return EventRecord(label=self.label, start_time=tstart, data=self.data.slice(tstart, tend), is_binary=self.is_binary, start_value=self.start_value)
+
+        # Do not interpolate content if it is a spiking record
+        if self.is_spikes:
+            output_data = TimeSeries(default=self.data.default, data={k:v for k,_,v in self.data.iterperiods(tstart, tend, lambda t1,t2,v: t1 in self.data._d)})
+            tstart = output_data.first_key() if len(output_data) else tstart
+        else:
+            output_data = self.data.slice(tstart, tend)
+
+        return EventRecord(label=self.label, start_time=tstart, data=output_data, is_binary=self.is_binary, start_value=self.start_value)
     
     def __iter__(self):
         return iter(self.data)
