@@ -1362,7 +1362,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         cache_folder (str): path to the cache folder.
         filename (str): filename of the cached data.
         cache_format (str, optional): Select which serialization format is used. Currently support 'pickle' and 'matlab'. Defaults to 'pickle'.
-        force (bool, optional): Force the fucntion to be executed even if cache exists. Defaults to False.
+        force (bool, optional): Force the function to be executed even if cache exists. Defaults to False.
         (args) Arguments of the function to be called
 
     Returns:
