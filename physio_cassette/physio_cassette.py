@@ -976,7 +976,6 @@ class EventRecord:
 
         # Parse data
         is_binary = isinstance(target_values, str) or len(target_values)==1
-        is_spikes = is_binary and duration_key is None
         for element in input_data:
             if element[event_key] in target_values:
                 value = 1 if is_binary else element[event_key]
@@ -985,6 +984,7 @@ class EventRecord:
                 if duration_key is not None and is_binary:
                     ts = ts + timedelta(seconds=float(element[duration_key])*ts_sampling)
                     data[ts] = 0
+        is_spikes = is_binary and (duration_key is None) and (len(data) >= 1)
         return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
                 
     @classmethod
@@ -1250,7 +1250,7 @@ class EventFrame(DataHolder):
         # Allocate the frames
         output = cls(start_date=start_date)
         for key, data in temp_dict.items():
-            _is_spikes = len(data['dur']) == 0
+            _is_spikes = (len(data['dur']) == 0) ^ (len(data['ts']) == 0)
             output[key] = EventRecord.from_ts_dur_array(label=key, t0=start_date, ts_array=data['ts'], duration_array=data['dur'], is_binary=True, is_spikes=_is_spikes)
         return output
 
