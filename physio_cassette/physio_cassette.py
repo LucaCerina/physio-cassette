@@ -352,23 +352,24 @@ class Signal:
     def __repr__(self):
         return f"Signal: {self.data.__repr__()}, fs={self.fs}, start_time={self.start_time.isoformat()}"
 
-    def __unary_op__(self:Signal, other:Union[int, float, np.ndarray, Signal], op:function) -> Signal:
+    def __unary_op__(self:Signal, other:Union[int, float, np.ndarray, Signal], op:function, r:bool=False) -> Signal:
         """Apply a unary operation, accounting for edge cases
 
         Args:
             self (Signal): Input Signal
             other (Union[int, float, np.ndarray, Signal]): other operand
             op (function): operation
+            r (bool, optional): operation is reversed. Defaults to False.
 
         Returns:
             Signal: Result of the operation
         """
         output = Signal(**vars(self))
         if np.issubdtype(type(other), np.number):
-            output.data = op(self.data, other)
+            output.data = op(self.data, other) if (not r) else op(other, self.data)
         elif isinstance(other, np.ndarray):
             if len(self)==len(other) and self.ndim==other.ndim:
-                output.data = op(self.data, other)
+                output.data = op(self.data, other) if (not r) else op(other, self.data)
             else:
                 raise ValueError(f"The Signal object and the array should have same size and dimensions, got {self.shape} and {other.shape}")
         elif isinstance(other, Signal):
@@ -376,7 +377,7 @@ class Signal:
                 overlap_start, self_slice, other_slice = self.__get_overlap__(other)
                 output.data = []
                 if overlap_start is not None:
-                    output.data = op(self[self_slice],other[other_slice])
+                    output.data = op(self[self_slice],other[other_slice]) if (not r) else op(other[self_slice], self[self_slice])
                     output.start_time = overlap_start
                     output.tstamps = None
             else:
@@ -390,25 +391,25 @@ class Signal:
         return self.__unary_op__(other, mul)
 
     def __rmul__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
-        return self.__unary_op__(other, mul)
+        return self.__unary_op__(other, mul, True)
     
     def __truediv__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, truediv)
     
     def __rtruediv__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
-        return self.__unary_op__(other, truediv)
+        return self.__unary_op__(other, truediv, True)
 
     def __add__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, add)
 
     def __radd__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
-        return self.__unary_op__(other, add)
+        return self.__unary_op__(other, add, True)
 
     def __sub__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, sub)
 
     def __rsub__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
-        return self.__unary_op__(other, sub)
+        return self.__unary_op__(other, sub, True)
 
     def __logical_op__(self:Signal, other:Union[int, float, bool], op:function) -> np.ndarray:
         """Apply logical operation only on data. DOES NOT return a Signal

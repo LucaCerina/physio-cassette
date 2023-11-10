@@ -91,3 +91,50 @@ class TestSignalFromMat:
         with pytest.warns(UserWarning):
             a,_ = Signal.from_mat_file(missing_file)
         assert a is None
+
+class TestSignalOps:
+    # TODO add tests with Signal and np.arrays as other element
+    @pytest.fixture
+    def original_signal(self):
+        test_signal = Signal(data=np.array([1,0,0,1,1,0,0,1]))
+        yield test_signal
+
+    def test_sum(self, original_signal):
+        expected_pos = np.array([2,1,1,2,2,1,1,2])
+        expected_sub = np.array([0,-1,-1,0,0,-1,-1,0])
+        
+        add_right = original_signal + 1
+        assert np.array_equal(expected_pos, add_right)
+        add_left = 1 + original_signal
+        assert np.array_equal(expected_pos, add_left)
+
+        add_neg_right = original_signal + (-1)
+        assert np.array_equal(expected_sub, add_neg_right)
+        add_neg_left = (-1) + original_signal
+        assert np.array_equal(expected_sub, add_neg_left)
+
+    def test_sub(self, original_signal):
+        expected_right = np.array([0,-1,-1,0,0,-1,-1,0])
+        expected_left = np.array([0,1,1,0,0,1,1,0])
+
+        sub_right = original_signal - 1
+        assert np.array_equal(expected_right, sub_right)
+        sub_left = 1 - original_signal
+        assert np.array_equal(expected_left, sub_left)
+
+    def test_mul(self, original_signal):
+        expected = np.array([2,0,0,2,2,0,0,2])
+        mul_right = original_signal * 2
+        assert np.array_equal(expected, mul_right)
+        mul_left = 2 * original_signal
+        assert np.array_equal(expected, mul_left)
+
+    def test_div(self, original_signal):
+        expected_right = np.array([0.5,0,0,0.5,0.5,0,0,0.5])
+        div_right = original_signal / 2
+        assert np.array_equal(expected_right, div_right) 
+
+        expected_left = np.array([2,np.inf,np.inf,2,2,np.inf,np.inf,2])
+        with pytest.warns(RuntimeWarning):
+            div_left_byzero = 2 / original_signal
+            assert np.array_equal(expected_left, div_left_byzero)
