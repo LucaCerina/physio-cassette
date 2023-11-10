@@ -1056,6 +1056,7 @@ class EventRecord:
 
         # Assign values
         n_samples = int(np.ceil((self.data.last_key() - self.start_time).total_seconds()/sampling_period))+1 if self.data.last_key()>self.start_time else 1
+        n_samples -= 1 if (self.start_time+timedelta(seconds=n_samples*sampling_period) > self.data.last_key()) else 0 # Do not extrapolate at the end
         arr_type = object if isinstance(self.data.first_value(), str) else type(self.data.first_value())
         values = np.zeros((n_samples,), dtype=arr_type)
         if self.is_spikes == False:
