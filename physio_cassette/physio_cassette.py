@@ -266,7 +266,8 @@ class Signal:
         if indexes is not None:
             _indexes = indexes if isinstance(indexes, slice) else slice(*indexes)
         else:
-            _indexes = slice(start, stop, step)
+            _start = 0 if start is None else start
+            _indexes = slice(_start, stop, step)
 
         # Check for start time slicing
         if reset_start_time:
