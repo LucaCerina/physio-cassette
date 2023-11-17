@@ -756,7 +756,7 @@ class EventRecord:
         return iter(self.data)
     
     def __repr__(self):
-        return f"EventRecord: {'spiking,' if self.is_spikes else ''}{'binary,' if self.is_binary else ''}, data {self.data.__repr__()}, start_time {self.start_time}"
+        return f"EventRecord \"{self.label}\": {'spiking,' if self.is_spikes else ''}{'binary,' if self.is_binary else ''} start_time {self.start_time}. Data:\n{self.data.__repr__()}"
 
     @classmethod
     def from_logical_array(cls, label:str, t0:datetime, input_array:np.ndarray, fs:float=1):
