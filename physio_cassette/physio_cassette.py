@@ -877,6 +877,8 @@ class EventRecord:
         # Timestamps are relative to start_time, assuming to be seconds
         rel_ts_flag = not isinstance(_ts_array[0], (datetime, np.datetime64))
         delta_dur_flag = isinstance(_duration_array[0], timedelta)
+        if rel_ts_flag: # Ensure correct type for timedelta
+            _ts_array = _ts_array.astype(float)
         for ts, dur in zip(_ts_array, _duration_array):
             t_start = start_time + timedelta(seconds=ts) if rel_ts_flag else ts
             data[t_start] = 1
