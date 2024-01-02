@@ -879,7 +879,7 @@ class EventRecord:
         delta_dur_flag = isinstance(_duration_array[0], timedelta)
         if rel_ts_flag: # Ensure correct type for timedelta
             _ts_array = _ts_array.astype(float)
-        for ts, dur in zip(_ts_array, _duration_array):
+        for ts, dur in filter(lambda x: x[1]>=0, zip(_ts_array, _duration_array)):
             t_start = start_time + timedelta(seconds=ts) if rel_ts_flag else ts
             data[t_start] = 1
             if isinstance(dur, timedelta) or ~np.isnan(dur):
@@ -913,6 +913,7 @@ class EventRecord:
 
         # Detect file type
         file_type = Path(record_filepath).suffix[1:]
+        is_text = file_type in ['csv', 'txt']
 
         # Fill values
         data = TimeSeries()      
@@ -923,12 +924,12 @@ class EventRecord:
 
         event_filter = lambda x: event_column in x
         with open(record_filepath, 'r') as csv_file:
-            for _ in range(skiprows*int(file_type=='csv')):
+            for _ in range(skiprows*int(is_text)):
                 csv_file.readline()
             # Select reader based on format
-            if file_type == 'csv':
+            if is_text:
                 reader = csv.DictReader(csv_file, delimiter=delimiter) 
-            elif file_type=='xls':
+            elif file_type =='xls':
                 reader = XLSDictReader(record_filepath)
             else:            
                 reader = openpyxl_dictreader.DictReader(record_filepath)
@@ -1198,7 +1199,7 @@ class EventFrame(DataHolder):
         super(EventFrame, self).__init__(*args, **kwargs)
 
     @classmethod
-    def from_csv(cls, record_filepath:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, delimiter:str=',', skiprows:int=0, **kwargs):
+    def from_csv(cls, record_filepath:str, labels: Iterable, event_column: str, ts_column:str, duration_column:str=None, start_time:datetime=datetime.fromtimestamp(0), ts_is_datetime:bool=False, duration_modifier:Callable=None, delimiter:str=',', skiprows:int=0, **kwargs):
         """Instantiate an EventFrame from a CSV file or any column-like file (e.g. Excel files with header), recording certain labels separately
 
         Args:
@@ -1209,6 +1210,7 @@ class EventFrame(DataHolder):
             duration_column (str): label of the duration column. If None store as spike EventRecord
             start_time (datetime, optional): Initial datetime of the data. Defaults to datetime.fromtimestamp(0).
             ts_is_datetime (bool, optional): Flag to parse ts column as datetime and not t-t0. Defaults to False.
+            duration_modifier (Callable, optional): Alter duration with a custom rule. Defaults to None
             delimiter (str, optional): CSV delimiter. Defaults to ','.
             skiprows (int, optional): Skip a certain number of rows before the csv reader
             \\**kwargs: keywords arguments passed to csv reader (e.g. skiprows)
@@ -1217,9 +1219,11 @@ class EventFrame(DataHolder):
             [EventFrame]: EventFrame instance
         """
         assert skiprows>=0, "Skiprows argument should be positive"
+        assert duration_modifier is None or isinstance(duration_modifier, Callable), "The duration modifier should be a callable function/lambda or None"
 
         # Detect file type
         file_type = Path(record_filepath).suffix[1:]
+        is_text = file_type in ['csv', 'txt']
 
         start_date = start_time
         # Allocate temporary dictionary
@@ -1229,10 +1233,10 @@ class EventFrame(DataHolder):
         # Parse CSV file
         event_filter = lambda x: event_column in x
         with open(record_filepath, 'r') as csv_file:
-            for _ in range(skiprows*int(file_type=='csv')):
+            for _ in range(skiprows*int(is_text)):
                 csv_file.readline()
             # Select reader based on format
-            if file_type == 'csv':
+            if is_text:
                 reader = csv.DictReader(csv_file, delimiter=delimiter) 
             elif file_type=='xls':
                 reader = XLSDictReader(record_filepath)
@@ -1240,7 +1244,7 @@ class EventFrame(DataHolder):
                 reader = openpyxl_dictreader.DictReader(record_filepath)
             # Parse rows
             for row in filter(event_filter, reader):
-                if any([re.search(x, row[event_column]) for x in labels]):
+                if any([re.fullmatch(x, row[event_column]) for x in labels]):
                     key = row[event_column]
                     # Add key in temp_dict if not present
                     if key not in temp_dict:
@@ -1252,6 +1256,10 @@ class EventFrame(DataHolder):
                         if duration_column is not None:
                             dur = float(row[duration_column])
                             temp_dict[key]['dur'].append(dur)
+        # Alter duration if necessary
+        if duration_modifier is not None:
+            for key in temp_dict.keys():
+                temp_dict[key]['dur'] = [duration_modifier(x) for x in temp_dict[key]['dur']]
         # Allocate the frames
         output = cls(start_date=start_date)
         for key, data in temp_dict.items():
@@ -1335,8 +1343,11 @@ class EventFrame(DataHolder):
         # Transform to EventRecord
         start_value = temp_series.first_value() if not temp_series.is_empty() else 0
         start_value = start_value if start_value is not None else 0
+        if temp_series.is_empty():
+            temp_series[self.start_date] = start_value
         record = EventRecord(label=label, start_time=self.start_date, data=temp_series, start_value=start_value)
-        record.is_binary = True if record.data.n_measurements()>1 and len(record.data.distribution().keys())<=2 else False
+        record.is_binary = True if (record.data.n_measurements()>1 and len(record.data.distribution().keys())<=2) or \
+                                   (record.data.n_measurements()==1 and record.data.first_value()==start_value) else False
 
         if as_signal:
             return record.as_array(sampling_period)
