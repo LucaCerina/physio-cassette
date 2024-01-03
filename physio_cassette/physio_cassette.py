@@ -49,8 +49,7 @@ __all__ = [
     'SignalFrame',
     'EventRecord',
     'EventFrame',
-    'autocache',
-    'parse_timestamp'
+    'autocache'
 ]
 
 # Default matlab format for signals
@@ -72,6 +71,9 @@ def parse_timestamp(timestamp:str, start_time:datetime) -> datetime:
     Returns:
         datetime: Parsed datetime
     """
+    if isinstance(timestamp, datetime):
+        warnings.warn("The input is already a datetime object, returning input")
+        return timestamp
     if len(timestamp)<3:
         # Unlikely to be any reasonable format
         return None

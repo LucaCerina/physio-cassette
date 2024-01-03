@@ -48,3 +48,8 @@ class TestTimestampParser:
         start_date = datetime(2000,1,1)
         parsed_date = parse_timestamp("", start_date)
         assert parsed_date is None
+
+    def test_datetime_as_input(self):
+        start_date = datetime(2000,1,1)
+        with pytest.warns(UserWarning):
+            parsed_date = parse_timestamp(start_date, start_date)
