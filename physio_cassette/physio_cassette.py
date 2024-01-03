@@ -49,7 +49,8 @@ __all__ = [
     'SignalFrame',
     'EventRecord',
     'EventFrame',
-    'autocache'
+    'autocache',
+    'parse_timestamp'
 ]
 
 # Default matlab format for signals
@@ -80,7 +81,7 @@ def parse_timestamp(timestamp:str, start_time:datetime) -> datetime:
     except ValueError:
         if len(timestamp)>10:
             try:
-                output = parser.parse(timestamp, fuzzy=True)
+                output = parser.parse(timestamp, fuzzy=True, default=datetime.fromtimestamp(0))
             except Exception:
                 # TODO extend functionalities to support other formats
                 raise ValueError("Unsupported data format. Update your data")
@@ -691,7 +692,7 @@ class EventRecord:
         Returns:
             int: Number of events
         """
-        return (self.data.n_measurements()-1)//2 if self.is_binary and self.data.n_measurements()>0 else self.data.n_measurements()
+        return (self.data.n_measurements()-1)//2 if self.is_binary and self.data.n_measurements()>1 else self.data.n_measurements()
 
     def __index_to_key(self, start:int=None, stop:int=None) -> Tuple[Any,Any]:
         """Convert integer indexes to TimeSeries keys
@@ -894,7 +895,7 @@ class EventRecord:
         """Instantiate an EventRecord from a CSV file any column-like file (e.g. Excel files with header)
 
         Args:
-            record_filepath (str): name of the file to be parsed
+            record_filepath (str): Path of the file to be parsed
             label (str): label assigned to the output EventRecord
             event_column (str): label of the event column in the CSV
             t0 (datetime): initial timestamp
@@ -942,11 +943,56 @@ class EventRecord:
         return cls(label=label, start_time=t0, data=data, is_binary=False, start_value=start_value)
 
     @classmethod
+    def from_flat_file(cls, record_filepath:str, label:str, parser:Callable, t0:datetime, start_value:Any=None, default_value:Any=None, ts_is_datetime:bool=True, ts_sampling:float=1.0, skiprows:int=0,):
+        """Instantiate an EventRecord from a generic text file with one annotation per line using a custom parser function.
+           The function should have a signature str -> str|float, Any, float|None expecting a datetime string of an event or its epoch or relative seconds, its value, and if it ends after a duration in seconds.
+           Return None to ignore a line.
+
+        Args:
+            record_filepath (str): Path to the file to be parsed
+            label (str): Label assigned to the output EventRecord
+            parser (Callable): Custom line parser (str -> str|float, Any, float|None)
+            t0 (datetime): Initial timestamp
+            start_value (Any, optional): Override start value of the EventRecord. Defaults to None.
+            default_value (Any, optional): Default value to be used if an event as a duration. Defaults to None -> same as start_value.
+            ts_is_datetime (bool, optional): Flag if the ts column is absolute timestamps, or an increasing value from t0. Defaults to True.
+            ts_sampling (float, optional): Sampling interval if timestamps are relative. Defaults to 1.0 seconds.
+            skiprows (int, optional): Skip a certain number of rows before parsing lines
+
+        Returns:
+            [EventRecord]: EventRecord instance
+        """
+        assert isinstance(parser, Callable), "Expected a function to parse annotation lines"
+
+        # Fill values
+        data = TimeSeries()
+        start_time = t0
+        _default_value = start_value if default_value is None else default_value
+
+        has_duration = False
+        with open(record_filepath, 'r') as rfile:
+            for _ in range(skiprows):
+                rfile.readline()
+            for line in rfile:
+                parsed_line = parser(line)
+                if parsed_line is not None:
+                    (ts, value, duration) = parsed_line
+                    ts = parse_timestamp(ts, start_time) if ts_is_datetime else start_time + timedelta(seconds=float(ts)*ts_sampling)
+                    data[ts] = value
+                    if duration is not None:
+                        has_duration = True
+                        data[ts+timedelta(seconds=duration)] = _default_value
+        is_binary = data.n_measurements()>1 and len(data.distribution().keys())<=2
+        is_spikes = is_binary and (has_duration==False)
+
+        return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
+
+    @classmethod
     def from_xml(cls, record_filepath:str, label:str, event_key:str, target_values:Union[str,list], ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
         """Instantiate an EventRecord from a XML file. Assuming that a certain depth is represented as a list of annotated tags.
 
         Args:
-            record_filepath (str): Name of the file to be parsed
+            record_filepath (str): Path of the file to be parsed
             label (str): Label assigned to the output EventRecord
             event_key (str): Which XML tag is associated to the type of event
             target_values (Union[str,list]): Values to be stored e.g. ['W', 'N1', 'N2'] or a single string for binary events (e.g. 'apnea')
@@ -1203,7 +1249,7 @@ class EventFrame(DataHolder):
         """Instantiate an EventFrame from a CSV file or any column-like file (e.g. Excel files with header), recording certain labels separately
 
         Args:
-            record_filepath (str): name of the file to be parsed
+            record_filepath (str): Path of the file to be parsed
             labels (Iterable): desired labels to be extracted in the CSV file
             event_column (str): label of the event column
             ts_column (str): label of the timestamp column
@@ -1275,7 +1321,7 @@ class EventFrame(DataHolder):
         If only target values are passed as an argument, the EventRecord will contain observed target values as states.
 
         Args:
-            record_filepath (str): Name of the file to be parsed
+            record_filepath (str): Path of the file to be parsed
             event_key (str): Which XML tag is associated to the type of event
             target_values (dict): Mapping of the target values of interest
             ts_key (str): Which XML tag is associated to the timing of the event
@@ -1346,8 +1392,7 @@ class EventFrame(DataHolder):
         if temp_series.is_empty():
             temp_series[self.start_date] = start_value
         record = EventRecord(label=label, start_time=self.start_date, data=temp_series, start_value=start_value)
-        record.is_binary = True if (record.data.n_measurements()>1 and len(record.data.distribution().keys())<=2) or \
-                                   (record.data.n_measurements()==1 and record.data.first_value()==start_value) else False
+        record.is_binary = (record.data.n_measurements()>1 and len(record.data.distribution().keys())<=2) 
 
         if as_signal:
             return record.as_array(sampling_period)
