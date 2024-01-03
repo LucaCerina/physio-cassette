@@ -985,7 +985,7 @@ class EventRecord:
                         has_duration = True
                         data[ts+timedelta(seconds=duration)] = _default_value
         is_binary = data.n_measurements()>1 and len(data.distribution().keys())<=2
-        is_spikes = is_binary and (has_duration==False)
+        is_spikes = is_binary and (has_duration==False) and len(data.distribution().keys())==1
 
         return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
 
