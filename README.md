@@ -3,7 +3,7 @@ Managing signals in physiology and associated metadata can be a pain.
 
 You want abstraction, but not much from any underlying Numpy array holding them.
 
-You want annotations in signals, but not obscure representations.
+You want annotations in signals, but not obscure proprietary representations.
 
 Physio Cassette is just that: Numpy arrays and dictionaries with flair. Physio Cassette provides also automatic caching operations using pickle and matlab storage
 
@@ -11,6 +11,7 @@ Physio Cassette is just that: Numpy arrays and dictionaries with flair. Physio C
 ### Basic data structures
 - Signal: a numpy array with associated sampling frequency, timestamps and minor metadata. Zero-cost abstraction, the data can be accessed directly
 - EventRecord: a class for time annotated events based on [traces](https://github.com/datascopeanalytics/traces) TimeSeries with support for binary, trains, and multilevel events
+
 Signals can be iterated using EventRecord events as anchor points and viceversa Events can be converted to a sampled Signal
 
 ### Containers
@@ -18,16 +19,19 @@ Signals can be iterated using EventRecord events as anchor points and viceversa 
 - SignalFrame: A container for Signal data structures.
 - EventFrame: A container for EventRecord structures, with support to merge operations (e.g. events annotated across multiple channels).
 
-### Supported IO
-Physio-cassette aims to support seamlessly different file and data formats.
+### Supported Inputs
+Physio-cassette aims to support seamlessly different file and data formats. All parsers can be customized without additional code to support more exotic / less interoperable data representations.
+
 XML format is currently based on NSRR interpretation of data annotations.
-Some functionalities will be added in the future. Other format specific features (e.g. physical/digital ranges in EDF and WFDB) are absent on purpose
+
+Some functionalities will be added in the future. Other format specific features (e.g. physical/digital ranges in EDF and WFDB) are absent on purpose.
+
 | Structure   | Numpy arrays       | CSV/columnar files | Matlab files                       | EDF files          | Physionet WFDB     | XML                |
 |-------------|--------------------|--------------------|------------------------------------|--------------------|--------------------|--------------------|
-| Signal      | :heavy_check_mark: |                    | :heavy_check_mark:                 | (use SignalFrame)  | (use SignalFrame)  |                    |
-| SignalFrame | :heavy_check_mark: |                    | :heavy_check_mark: (1 file/signal) | :heavy_check_mark: | :heavy_check_mark: |                    |
-| EventRecord | :heavy_check_mark: | :heavy_check_mark: |                                    |                    | :heavy_check_mark: | :heavy_check_mark: |
-| EventFrame  | (use EventRecords) | :heavy_check_mark: |                                    |                    | :heavy_check_mark: | :heavy_check_mark: |
+| Signal      | YES                |                    | YES                                | (use SignalFrame)  | (use SignalFrame)  |                    |
+| SignalFrame | YES                |                    | YES                (1 file/signal) | YES                | YES                |                    |
+| EventRecord | YES                | YES                |                                    |                    | YES                | YES                |
+| EventFrame  | (use EventRecords) | YES                |                                    |                    | YES                | YES                |
 
 ### Caching
 To cache an operation simply do:
