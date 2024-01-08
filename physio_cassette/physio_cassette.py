@@ -759,7 +759,7 @@ class EventRecord:
         return iter(self.data)
     
     def __repr__(self):
-        return f"EventRecord \"{self.label}\": {'spiking,' if self.is_spikes else ''}{'binary,' if self.is_binary else ''} start_time {self.start_time}. Data:\n{self.data.__repr__()}"
+        return f"EventRecord \"{self.label}\": {'spiking,' if self.is_spikes else ''}{'binary,' if self.is_binary else ''}start_time {self.start_time}. Data:\n{self.data.__repr__()}"
 
     @classmethod
     def from_logical_array(cls, label:str, t0:datetime, input_array:np.ndarray, fs:float=1):
@@ -971,6 +971,12 @@ class EventRecord:
         start_time = t0
         _default_value = start_value if default_value is None else default_value
 
+        # Keep track of unique values
+        unique_states = set()
+        if start_value is not None:
+            unique_states.add(start_value)
+
+        # Parse record
         has_duration = False
         with open(record_filepath, 'r') as rfile:
             for _ in range(skiprows):
@@ -981,11 +987,12 @@ class EventRecord:
                     (ts, value, duration) = parsed_line
                     ts = parse_timestamp(ts, start_time) if ts_is_datetime else start_time + timedelta(seconds=float(ts)*ts_sampling)
                     data[ts] = value
+                    unique_states.add(value)
                     if duration is not None:
                         has_duration = True
                         data[ts+timedelta(seconds=duration)] = _default_value
-        is_binary = data.n_measurements()>1 and len(data.distribution().keys())<=2
-        is_spikes = is_binary and (has_duration==False) and len(data.distribution().keys())==1
+        is_binary = data.n_measurements()>1 and len(unique_states)==2
+        is_spikes = is_binary and (has_duration==False) and len(unique_states)==1
 
         return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
 
