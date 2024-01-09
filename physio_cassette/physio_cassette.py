@@ -682,7 +682,7 @@ class EventRecord:
         Returns:
             [self]: initialized EventRecord
         """
-        if self.start_value is not None and len(self) and self.data.first_key() > self.start_time:
+        if self.start_value is not None and len(self.data) and self.data.first_key() > self.start_time:
             self.data[self.start_time] = self.start_value
         return self
 
