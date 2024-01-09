@@ -689,12 +689,17 @@ class EventRecord:
     def __len__(self):
         """Override __len__ to return the number of events.
         In binary series first 'non-event' is subtracted. Start and end of event (state transitions) are considered together, so divided by 2
-        In non binary series returns number of measurements.
+        In non binary series returns number of measurements or 0.
 
         Returns:
             int: Number of events
         """
-        return (self.data.n_measurements()-1)//2 if self.is_binary and self.data.n_measurements()>1 else self.data.n_measurements()
+        if not self.is_binary:
+            return self.data.n_measurements()
+        elif self.data.n_measurements()>1:
+            return (self.data.n_measurements()-1)//2 
+        else:
+            return 0 # Assuming a binary EventRecord with only the start/0 value to be empty
 
     def __index_to_key(self, start:int=None, stop:int=None) -> Tuple[Any,Any]:
         """Convert integer indexes to TimeSeries keys
@@ -1393,6 +1398,7 @@ class EventFrame(DataHolder):
                 if val not in self.labels:
                     warnings.warn(f"Label {val} is not present in the EventFrame.")
         series = [x.data for x in self.values() if ((labels is None) or (x.label in labels))]
+        all_binary_inputs = all([x.is_binary for x in self.values() if ((labels is None) or (x.label in labels))])
         temp_series = TimeSeries.merge(series, operation= lambda x: int(any(x))) if any([x.n_events>0 for x in self.values()]) else TimeSeries()
 
         # Transform to EventRecord
@@ -1401,7 +1407,7 @@ class EventFrame(DataHolder):
         if temp_series.is_empty():
             temp_series[self.start_date] = start_value
         record = EventRecord(label=label, start_time=self.start_date, data=temp_series, start_value=start_value)
-        record.is_binary = (record.data.n_measurements()>1 and len(record.data.distribution().keys())<=2) 
+        record.is_binary = ((record.data.n_measurements()>1 and len(record.data.distribution().keys())<=2)) or all_binary_inputs
 
         if as_signal:
             return record.as_array(sampling_period)
