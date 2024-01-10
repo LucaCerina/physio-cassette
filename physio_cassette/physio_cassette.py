@@ -936,11 +936,11 @@ class EventRecord:
                 csv_file.readline()
             # Select reader based on format
             if is_text:
-                reader = csv.DictReader(csv_file, delimiter=delimiter) 
+                reader = csv.DictReader(csv_file, delimiter=delimiter, **kwargs) 
             elif file_type =='xls':
-                reader = XLSDictReader(record_filepath)
+                reader = XLSDictReader(record_filepath, **kwargs)
             else:            
-                reader = openpyxl_dictreader.DictReader(record_filepath)
+                reader = openpyxl_dictreader.DictReader(record_filepath, **kwargs)
             # Parse rows
             for row in filter(event_filter, reader):
                 value = row[event_column]
@@ -1297,11 +1297,11 @@ class EventFrame(DataHolder):
                 csv_file.readline()
             # Select reader based on format
             if is_text:
-                reader = csv.DictReader(csv_file, delimiter=delimiter) 
+                reader = csv.DictReader(csv_file, delimiter=delimiter, **kwargs) 
             elif file_type=='xls':
-                reader = XLSDictReader(record_filepath)
+                reader = XLSDictReader(record_filepath, **kwargs)
             else:            
-                reader = openpyxl_dictreader.DictReader(record_filepath)
+                reader = openpyxl_dictreader.DictReader(record_filepath, **kwargs)
             # Parse rows
             for row in filter(event_filter, reader):
                 if any([re.fullmatch(x, row[event_column]) for x in labels]):
