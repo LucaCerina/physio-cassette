@@ -760,6 +760,10 @@ class EventRecord:
 
         return EventRecord(label=self.label, start_time=tstart, data=output_data, is_binary=self.is_binary, start_value=self.start_value)
     
+    def __setitem__(self, index:datetime, value:Any):
+        assert isinstance(index, (datetime, slice)), f"EventRecord expects a datetime or slice of datetimes index to set items. Got {type(index)}"
+        self.data.__setitem__(index, value)
+    
     def __iter__(self):
         return iter(self.data)
     
