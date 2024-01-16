@@ -1318,7 +1318,10 @@ class EventFrame(DataHolder):
                     if ts is not None:
                         temp_dict[key]['ts'].append(ts)
                         if duration_column is not None:
-                            dur = float(row[duration_column])
+                            try:
+                                dur = float(row[duration_column])
+                            except ValueError:
+                                dur = 0
                             temp_dict[key]['dur'].append(dur)
         # Alter duration if necessary
         if duration_modifier is not None:
