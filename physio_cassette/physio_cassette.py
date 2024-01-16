@@ -1031,6 +1031,8 @@ class EventRecord:
         # Fill values
         data = TimeSeries()
         start_time = t0
+        if start_value is not None:
+            data[t0] = start_value
 
         # Load data
         with open(record_filepath, 'rb') as xml_file:
