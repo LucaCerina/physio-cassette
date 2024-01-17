@@ -1052,9 +1052,9 @@ class EventRecord:
                 value = 1 if is_binary else element[event_key]
                 ts = parse_timestamp(element[ts_key], start_time) if ts_is_datetime else start_time + timedelta(seconds=float(element[ts_key])*ts_sampling)
                 data[ts] = value
-                if duration_key is not None and is_binary:
+                if duration_key is not None:
                     ts = ts + timedelta(seconds=float(element[duration_key])*ts_sampling)
-                    data[ts] = 0
+                    data[ts] = 0 if is_binary else element[event_key]
         is_spikes = is_binary and (duration_key is None) and (len(data) >= 1)
         return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
                 
