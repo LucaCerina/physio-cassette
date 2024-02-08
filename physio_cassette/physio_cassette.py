@@ -170,9 +170,10 @@ class DataHolder(dict):
         for key, val in mapper.items():
             if key in self:
                 self[val] = self.pop(key)
-                self[val].label = val
+                if hasattr(self[val], 'label'):
+                    self[val].label = val
     
-    def is_data_present(self, input_labels:Union[str, Iterable]) -> bool:
+    def __contains__(self, input_labels:Union[str, Iterable]) -> bool:
         """Check if every label given as input is present in the DataHolder
 
         Args:
