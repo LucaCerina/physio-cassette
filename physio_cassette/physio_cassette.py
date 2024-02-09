@@ -29,6 +29,7 @@ from numbers import Number
 from operator import *
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, List, Tuple, Union
+from types import MappingProxyType
 
 import numpy as np
 import openpyxl_dictreader
@@ -289,7 +290,7 @@ class Signal:
     
     def sample_by_events(self, events:EventRecord, start_time:datetime=None, target_values:Any=None, window_length:Union[float, Tuple]=30, direction:str='both', ignore_first_event:bool=True) -> Iterator[Tuple[np.ndarray, Any, datetime, Tuple, Tuple]]:
         """Iterate segments of a Signal using events in EventRecord as anchor points. Select events of interest and configure width of samples around the event.
-           Each sample returns the timing and value of the event, the distance with adjacent events (NaN for first and last event), and if adjacent events overlap with sample length
+           Each sample returns the timing and value of the event, the distance with adjacent events (NaN for first and last event), and if adjacent events overlap with sample length.
 
         Args:
             events (EventRecord): EventRecord to be iterated
@@ -651,6 +652,51 @@ class SignalFrame(DataHolder):
                     if (output.start_date is None) or (signal.start_time < output.start_date): 
                         output.start_date = signal.start_time
         return output
+
+    def sample_by_events(self, labels:Union[str,list], events:EventRecord, start_time:datetime=None, target_values:Any=None, window_length:Union[float, Tuple]=30, direction:str='both', ignore_first_event:bool=True) -> Iterator[Tuple[MappingProxyType, Any, datetime, Tuple, Tuple]]:
+        """Iterate segments of a SignalFrame using events in EventRecord as anchor points. Select events of interest and configure width of samples around the event.
+           Each sample returns the timing and value of the event, the distance with adjacent events (NaN for first and last event), and if adjacent events overlap with sample length.
+           Data from signals is returned in a NamedTuple.
+           Note! the samples will have different sizes if the sampling rate is different. Sampling rates are not returned in the current implementation
+
+        Args:
+            labels (Union[str,list], optional): Which signals must be returned
+            events (EventRecord): EventRecord to be iterated
+            start_time (datetime, optional): Override start time if signal and events are not aligned. Defaults to None.
+            target_values (Any, optional): Which target values in events should yield a sample. Defaults to None, all values are used.
+            window_length (Union[float, Tuple], optional): Length of the window to be used. Can be two values for asymmmetric windows. Defaults to 30s.
+            direction (str, optional): Direction of the samples, can be up to the event ('backward'), after it ('forward') or around it ('both'). Defaults to 'both'.
+            ignore_first_event (bool, optional): Ignore the first value, even if in target (e.g. binary records starting with 0). Defaults to True.
+
+        Yields:
+            MappingProxyType(str,np.ndarray): immutable dict with keys as the labels in the data and samples as values
+            Any: value of the event. Constant for all labels
+            datetime: datetime of the event. Constant for all labels
+            Tuple: distance with adjacent events. Constant for all labels
+            Tuple: True if adjacent events overlap with the window. Constant for all labels
+        """
+        # Check available labels and instantiate iterators
+        _labels = [x for x in labels] if isinstance(labels, list) else [labels]
+        _iterators = []
+        for label in _labels:
+            if label not in self:
+                warnings.warn(f"Label {label} missing in the SignalFrame. It will be ignored.")
+                _labels.remove(label)
+                continue
+            iterator = self[label].sample_by_events(events, start_time, target_values, window_length, direction, ignore_first_event)
+            _iterators.append(iterator)
+        assert len(_labels)>0, f"The SignalFrame doesn't contain any of the labels {labels}"
+
+        # Iterate and yield
+        for samples in zip(*_iterators):
+            # Get data
+            output_samples = {}
+            # TODO check what happens with Signals of different lengths
+            for k, sample in zip(_labels, samples):
+                output_samples[k] = sample.data
+            output_samples = MappingProxyType(output_samples)
+
+            yield SignalbyEvent(output_samples, sample.value, sample.timestamp, sample.distance, sample.overlap)
 
 @dataclass
 class EventRecord:
