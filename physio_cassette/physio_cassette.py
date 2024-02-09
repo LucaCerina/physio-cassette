@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from glob import glob
 from hashlib import blake2b
 from importlib.metadata import PackageNotFoundError, version
-from numbers import Number
+from numbers import Integral, Number
 from operator import *
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, List, Tuple, Union
@@ -243,14 +243,16 @@ class Signal:
         self.data = np.array(self.data) if self.data is not None else np.array([])
         self.tstamps = np.array(self.tstamps) if self.tstamps is not None else np.array([])
 
-    def __setitem__(self, indexes:slice, values:Union[np.ndarray, Number]):
+    def __setitem__(self, indexes:Union[slice,Integral,np.ndarray, list], values:Union[np.ndarray, Number]):
         """Update values of a slice of the Signal
 
         Args:
-            indexes (slice): example sig[1:1000]
+            indexes (Union[slice,Integral,np.ndarray, list]): Index of the item/s to be set : slice example sig[1:1000], integer, array or list
             values (Union[np.ndarray, Number]): new values
         """
-        assert isinstance(indexes, slice) or (isinstance(indexes, np.ndarray) and any([np.issubdtype(indexes[0], np.bool_), np.issubdtype(indexes[0], np.integer)]))
+        if not (isinstance(indexes, (slice, Integral)) or (isinstance(indexes, (np.ndarray, list))\
+               and any([np.issubdtype(indexes[0], np.bool_), np.issubdtype(indexes[0], np.integer)]))):
+            raise IndexError("only integers, slices (`:`) and integer or boolean arrays are valid indices")
         assert isinstance(values, np.ndarray) or isinstance(values, Number)
         self.data[indexes] = values
 

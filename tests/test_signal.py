@@ -28,7 +28,7 @@ class TestSignal:
     
     def test_invalid_setitem_index(self, sample_signal):
         a = sample_signal
-        with pytest.raises(AssertionError):
+        with pytest.raises(IndexError):
             idx = np.array([1,2], dtype=np.float64)
             a[idx] = 0
     
@@ -36,6 +36,8 @@ class TestSignal:
         a = sample_signal
         with pytest.raises(AssertionError):
             a[1] = '1'
+        a[1]=10
+        assert a[1]==10
 
     def test_invalid_sub(self, sample_signal):
         a = sample_signal
