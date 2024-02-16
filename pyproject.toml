@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physio_cassette"
-version = "0.2.3"
+version = "0.2.4"
 description = "Storage structures for signals (mostly physiological data), metadata and event annotations"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -33,8 +33,9 @@ dependencies = [
 
 [project.urls]
 homepage = "https://github.com/LucaCerina/physio-cassette"
+"Bug Tracker" = "https://github.com/LucaCerina/physio-cassette/issues"
 
 [metadata]
 author = "LucaCerina"
-author_email = "lccerina@gmail.com"
+author_email = "lccerina@duck.com"
 license = "MIT"
