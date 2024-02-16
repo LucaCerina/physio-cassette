@@ -746,7 +746,8 @@ class EventRecord:
         if not self.is_binary:
             return self.data.n_measurements()
         elif self.data.n_measurements()>1:
-            return (self.data.n_measurements()-1)//2 
+            remainder = self.data.n_measurements() % 2 # Assess that the start/0 value may be overwritten
+            return (self.data.n_measurements()-remainder)//2 
         else:
             return 0 # Assuming a binary EventRecord with only the start/0 value to be empty
 
