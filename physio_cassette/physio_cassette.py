@@ -1271,7 +1271,8 @@ class EventRecord:
 
     @property
     def duration(self) -> float:
-        """Return duration of the Record in seconds, as the difference between first key and end
+        """Return duration of the Record in seconds, as the difference between first key and end.
+        Will return 0 if the Record is empty
 
         Returns:
             float: duration in seconds
@@ -1303,7 +1304,7 @@ class EventFrame(DataHolder):
         labels: list[str]
             list of labels for all Records
         dict object: dict
-            Records are stored as a dict with label:Signal format
+            Records are stored as a dict with label:EventRecord format
     """
     start_date = None
 
@@ -1450,9 +1451,8 @@ class EventFrame(DataHolder):
         """
         # Merge EventRecord timeseries
         if labels is not None:
-            for val in labels:
-                if val not in self.labels:
-                    warnings.warn(f"Label {val} is not present in the EventFrame.")
+            for val in filter(lambda x: x not in self.labels, labels):
+                warnings.warn(f"Label {val} is not present in the EventFrame.")
         series = [x.data for x in self.values() if ((labels is None) or (x.label in labels))]
         all_binary_inputs = all([x.is_binary for x in self.values() if ((labels is None) or (x.label in labels))])
         temp_series = TimeSeries.merge(series, operation= lambda x: int(any(x))) if any([x.n_events>0 for x in self.values()]) else TimeSeries()
@@ -1472,7 +1472,7 @@ class EventFrame(DataHolder):
 
     @property
     def n_events(self) -> int:
-        """Return the total number of respiratory events
+        """Return the total number of events in the EventFrame
 
         Returns:
             int: Total number of events
