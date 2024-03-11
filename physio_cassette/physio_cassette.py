@@ -1178,6 +1178,7 @@ class EventRecord:
         if self.is_spikes == False:
             # TODO write proper tests for EventRecord sampling
             # Regular data is resampled without binning
+            # Check both first and last values that may not be present
             if self.data.first_key() > self.start_time:
                 t0_sample = np.clip(int(np.round((self.data.fisrt_key()-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
                 values[0:t0_sample] = self.start_value
@@ -1185,6 +1186,8 @@ class EventRecord:
                 t0_sample = np.clip(int(np.round((t0-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
                 t1_sample = np.clip(int(np.round((t1-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
                 values[t0_sample:t1_sample] = val
+            if t1_sample < n_samples:
+                values[t1_sample:] = val
         else:
             # Assign to closest samples
             for t,_ in self.data.items():
