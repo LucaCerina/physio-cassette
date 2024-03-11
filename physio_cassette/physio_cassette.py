@@ -1176,19 +1176,15 @@ class EventRecord:
         arr_type = object if isinstance(self.data.first_value(), str) else type(self.data.first_value())
         values = np.zeros((n_samples,), dtype=arr_type)
         if self.is_spikes == False:
+            # TODO write proper tests for EventRecord sampling
             # Regular data is resampled without binning
-            sample_delta = timedelta(seconds=sampling_period)
-            values[0] = self.data.first_value()
-            for i in range(1, n_samples):
-                curr_t = self.start_time + timedelta(seconds=i*sampling_period)
-                if curr_t in self.data._d:
-                    # print(self.data[curr_t])
-                    values[i] = self.data[curr_t]
-                else:
-                    right_index = self.data._d.bisect_right(curr_t)
-                    prev_item = self.data.get_item_by_index(right_index-1)
-                    near_flag = (curr_t - prev_item[0]) <= sample_delta
-                    values[i] = prev_item[1] if near_flag else values[i-1]
+            if self.data.first_key() > self.start_time:
+                t0_sample = np.clip(int(np.round((self.data.fisrt_key()-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
+                values[0:t0_sample] = self.start_value
+            for (t0, val), (t1, _) in self.data.iterintervals():
+                t0_sample = np.clip(int(np.round((t0-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
+                t1_sample = np.clip(int(np.round((t1-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
+                values[t0_sample:t1_sample] = val
         else:
             # Assign to closest samples
             for t,_ in self.data.items():
