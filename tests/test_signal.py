@@ -61,6 +61,24 @@ class TestSignal:
         with pytest.warns(UserWarning):
             a+b
 
+    def test_update(self, sample_signal):
+        new_data = np.arange(12)
+        data_updated = sample_signal.update(data=new_data)
+        assert all(new_data==data_updated.data)
+
+        new_fs = 2.0
+        fs_updated = sample_signal.update(fs=new_fs)
+        assert new_fs==fs_updated.fs
+
+        with pytest.raises(AssertionError):
+            wrong_input = sample_signal.update(invalid_arg=3.0)
+        
+        # Test timestamps are reset
+        tstamps = sample_signal.time
+        assert sample_signal.tstamps is not None
+        data_updated = sample_signal.update(data=new_data, tstamps=np.arange(12))
+        assert data_updated.tstamps is None or len(data_updated.tstamps)==0
+
 class TestSignalFromMat:
     @pytest.fixture
     def good_file(self):

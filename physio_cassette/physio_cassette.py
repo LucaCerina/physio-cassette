@@ -253,6 +253,22 @@ class Signal:
         assert isinstance(values, np.ndarray) or isinstance(values, Number)
         self.data[indexes] = values
 
+    def update(self, **kwargs) -> Signal:
+        """Modify a Signal and return a new instance. For example sig.update(data=[...]) would change the data
+
+        Returns:
+            Signal: Updated signal
+        """
+        origin_dict = self.__dict__
+        # Checks on the input
+        assert set(kwargs.keys()).issubset(set(origin_dict)), f"Some arguments of Signal update are invalid: {set(kwargs.keys()).difference(set(origin_dict))}"
+        
+        # Updated data, tstamps are always reset (checking them would have a lot of edge cases)
+        output_dict = dict(origin_dict, **kwargs)
+        output_dict['tstamps'] = None
+        
+        return Signal(**output_dict)
+
     def sub(self, indexes:Union[slice,Iterable]=None, stop:Any=None, start:Any=None, step:Any=None, reset_start_time:bool=True):
         """Return a slice of self as a Signal object
 
@@ -878,7 +894,7 @@ class EventRecord:
         # Define if input is binary or spikes
         unique_states = len(set(input_array))
         _is_binary = unique_states==2 or (unique_states<2 and (start_value is not None and start_value!=input_array[0]))
-        _is_spikes = unique_states==1 
+        _is_spikes = unique_states==1 # TODO this leads to bugs
 
         get_ts = lambda i: t0 + timedelta(seconds=i*ts_sampling) if ts_array is None else (ts_array[i] if isinstance(ts_array[0], (datetime, np.datetime64)) else t0 + timedelta(seconds=ts_array[i]))
         data = TimeSeries()
