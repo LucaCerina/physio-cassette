@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+import numpy as np
 import pytest
 
 from physio_cassette.physio_cassette import EventRecord
@@ -71,3 +72,8 @@ class TestEventRecord:
         # Force post_init call
         test_record = EventRecord(start_time=datetime.fromtimestamp(0), data=TimeSeries(data={datetime.fromtimestamp(1):1}), start_value=0)
         assert test_record.data.items()[0][1] == 0
+
+    def test_empty_asarray(self, empty_binary_record):
+        # An empty EventRecord should be represented by an empty array
+        empty_array = empty_binary_record.as_array(sampling_period = 1.0)
+        assert np.all(empty_array.data == np.zeros(0, dtype=empty_array.data.dtype))
