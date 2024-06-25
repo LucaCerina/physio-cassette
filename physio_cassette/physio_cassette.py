@@ -431,6 +431,12 @@ class Signal:
 
     def __rsub__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
         return self.__unary_op__(other, sub, True)
+    
+    def __pow__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, pow)
+    
+    def __rpow__(self:Signal, other:Union[int, float, np.ndarray, Signal]) -> Signal:
+        return self.__unary_op__(other, pow, True)
 
     def __logical_op__(self:Signal, other:Union[int, float, bool], op:function) -> np.ndarray:
         """Apply logical operation only on data. DOES NOT return a Signal

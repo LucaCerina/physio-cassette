@@ -119,6 +119,11 @@ class TestSignalOps:
         test_signal = Signal(data=np.array([1,0,0,1,1,0,0,1]))
         yield test_signal
 
+    @pytest.fixture
+    def simple_range_signal(self):
+        test_signal = Signal(data=np.array([1,2,3,4,5,6,7,8,9]))
+        yield test_signal
+
     def test_sum(self, original_signal):
         expected_pos = np.array([2,1,1,2,2,1,1,2])
         expected_sub = np.array([0,-1,-1,0,0,-1,-1,0])
@@ -158,3 +163,20 @@ class TestSignalOps:
         with pytest.warns(RuntimeWarning):
             div_left_byzero = 2 / original_signal
             assert np.array_equal(expected_left, div_left_byzero)
+
+    def test_pow(self, simple_range_signal):
+        # Original [1,2,3,4,5,6,7,8,9]
+        # **2
+        expected = np.array([1,4,9,16,25,36,49,64,81])
+        pow_2 = simple_range_signal**2
+        assert np.array_equal(expected, pow_2)
+
+        # **0.5 (sqrt)
+        expected = np.array([1., 1.41421356, 1.73205081, 2., 2.23606798, 2.44948974, 2.64575131, 2.82842712, 3.])
+        pow_05 = simple_range_signal**0.5
+        assert np.isclose(expected, pow_05, atol=1e-5).all()
+
+        # 2**sig
+        expected = np.array([2,4,8,16,32,64,128,256,512])
+        two_pow = 2**simple_range_signal
+        assert np.array_equal(expected, two_pow)
