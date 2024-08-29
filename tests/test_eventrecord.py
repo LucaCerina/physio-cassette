@@ -77,3 +77,9 @@ class TestEventRecord:
         # An empty EventRecord should be represented by an empty array
         empty_array = empty_binary_record.as_array(sampling_period = 1.0)
         assert np.all(empty_array.data == np.zeros(0, dtype=empty_array.data.dtype))
+
+    def test_different_start_asarray(self, simple_binary_record):
+        # Change start date
+        simple_binary_record.start_time = simple_binary_record.start_time-timedelta(seconds=1)
+        simple_array = simple_binary_record.as_array(sampling_period=1)
+        assert np.all(simple_array.data[0:2] == simple_binary_record.start_value)

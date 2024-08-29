@@ -1202,7 +1202,7 @@ class EventRecord:
             # Regular data is resampled without binning
             # Check both first and last values that may not be present
             if self.data.first_key() > self.start_time:
-                t0_sample = np.clip(int(np.round((self.data.fisrt_key()-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
+                t0_sample = np.clip(int(np.round((self.data.first_key()-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
                 values[0:t0_sample] = self.start_value
             for (t0, val), (t1, _) in self.data.iterintervals():
                 t0_sample = np.clip(int(np.round((t0-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
@@ -1216,7 +1216,7 @@ class EventRecord:
                 t_sample = np.clip(int(np.round((t-self.start_time).total_seconds()/sampling_period)), None, n_samples-1)
                 values[t_sample] = 1
 
-        output_dtype = np.bool8 if self.is_binary else type(self.data.first_value())
+        output_dtype = np.bool_ if self.is_binary else type(self.data.first_value())
         return Signal(label = self.label, data = np.array(values).astype(output_dtype), fs = 1/sampling_period, start_time=self.start_time)
 
     def state_frequency(self, sampling_period:float=None) -> Union[Any,Signal]:
