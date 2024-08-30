@@ -1585,7 +1585,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         hashed_call = hash(source, vars_data, args, kwargs) 
         # Check if folder exists or create it
         if not Path(cache_folder).exists():
-            os.makedirs(cache_folder)
+            os.makedirs(cache_folder, exist_ok=True)
 
         # Read data if not forced to call the function
         filepath = f"{cache_folder}/{filename}.{file_extension[cache_format]}"
