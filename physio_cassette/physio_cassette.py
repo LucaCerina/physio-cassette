@@ -17,7 +17,7 @@ import pickle
 import warnings
 from collections import namedtuple
 from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from glob import glob
 from hashlib import blake2b
@@ -739,7 +739,7 @@ class EventRecord:
     """
     label: str = ''
     start_time: datetime = datetime.fromtimestamp(0)
-    data: TimeSeries = TimeSeries()
+    data: TimeSeries = field(default_factory=TimeSeries)
     is_binary: bool = False
     is_spikes: bool = False
     start_value: Any = None
@@ -750,6 +750,8 @@ class EventRecord:
         Returns:
             [self]: initialized EventRecord
         """
+        if not isinstance(self.data, TimeSeries):
+            self.data = TimeSeries(self.data, default=self.start_value)
         if self.start_value is not None and len(self.data) and self.data.first_key() > self.start_time:
             self.data[self.start_time] = self.start_value
         return self

@@ -83,3 +83,10 @@ class TestEventRecord:
         simple_binary_record.start_time = simple_binary_record.start_time-timedelta(seconds=1)
         simple_array = simple_binary_record.as_array(sampling_period=1)
         assert np.all(simple_array.data[0:2] == simple_binary_record.start_value)
+
+    def test_memory_collision(self):
+        # The data of two EventRecord should have different addresses. Bug caused by dataclass hashable default types. Fixed in v0.2.7
+        a = EventRecord(label='a', start_time=datetime.fromtimestamp(0), start_value=0, is_binary=False, is_spikes=False)
+        b = EventRecord(label='b', start_time=datetime.fromtimestamp(0), start_value=0, is_binary=False, is_spikes=False)
+
+        assert id(a.data)!=id(b.data)
