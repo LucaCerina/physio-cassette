@@ -90,3 +90,17 @@ class TestEventRecord:
         b = EventRecord(label='b', start_time=datetime.fromtimestamp(0), start_value=0, is_binary=False, is_spikes=False)
 
         assert id(a.data)!=id(b.data)
+
+    def test_xml_valuefunction(self):
+        # The data from an XML with a value function should be different from a binary one with just the duration of the event (See test_eventrecord.xml)
+        test_xml = './tests/sample_eventrecord.xml'
+        t0 = datetime.fromtimestamp(0)
+        data_function = EventRecord.from_xml(test_xml, label='d', event_key='EventConcept',target_values='SpO2 desaturation|SpO2 desaturation',\
+                                               ts_key='Start',t0=t0,start_value=0, duration_key='Duration', events_path=['PSGAnnotation', 'ScoredEvents', 'ScoredEvent'],\
+                                               ts_is_datetime=False, value_function=lambda x:float(x['SpO2Baseline'])-float(x['SpO2Nadir']))
+        data_nofunction = EventRecord.from_xml(test_xml, label='d', event_key='EventConcept',target_values='SpO2 desaturation|SpO2 desaturation',\
+                                               ts_key='Start',t0=t0,start_value=0, duration_key='Duration', events_path=['PSGAnnotation', 'ScoredEvents', 'ScoredEvent'],\
+                                               ts_is_datetime=False)
+        assert data_function.is_binary!=data_nofunction.is_binary
+        assert all(x<=1 for _,x in data_nofunction)
+        assert all(x==0 or np.isclose(x, 2.0) for _,x in data_function)

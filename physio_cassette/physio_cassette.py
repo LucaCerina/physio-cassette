@@ -1077,7 +1077,18 @@ class EventRecord:
         return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
 
     @classmethod
-    def from_xml(cls, record_filepath:str, label:str, event_key:str, target_values:Union[str,list], ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
+    def _get_xml_value(cls, element:dict, event_key:str, default_value:int=None, value_function:Callable=None):
+        value = None
+        if value_function is not None:
+            value = value_function(element)
+        elif default_value is not None:
+            value = default_value
+        else:
+            value = element.get(event_key, None)
+        return value
+    
+    @classmethod
+    def from_xml(cls, record_filepath:str, label:str, event_key:str, target_values:Union[str,list], ts_key:str, t0:datetime, start_value:Any=None, value_function:Callable=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
         """Instantiate an EventRecord from a XML file. Assuming that a certain depth is represented as a list of annotated tags.
 
         Args:
@@ -1088,6 +1099,7 @@ class EventRecord:
             ts_key (str): Which XML tag is associated to the timing of the event
             t0 (datetime): Initial timestamp
             start_value (Any, optional): Initial value of the record. Defaults to None.
+            value_function (Callable, optional): Set values according to elements in the data. Defaults to None (values are explicit from event_key)
             duration_key (str, optional): Which XML tag is associated to the timing of the event. Defaults to None -> spikes for binary events, automatically embedded for other events (e.g. sleep stages).
             events_path (list, optional): How to reach the right depth in the XML. Defaults to [] -> root of the document.
             ts_is_datetime (bool, optional): Flag if the ts column is absolute timestamps, or an increasing value from t0. Defaults to True.
@@ -1099,6 +1111,11 @@ class EventRecord:
         Returns:
             [EventRecord]: EventRecord instance
         """
+        # Checks
+        if not (callable(value_function) or (value_function is None)):
+            value_function = None
+            warnings.warn(f"Value function in EventRecord.xml should be None or Callable, got {type(value_function)}. Setting to None")
+
         # Fill values
         data = TimeSeries()
         start_time = t0
@@ -1117,17 +1134,17 @@ class EventRecord:
             assert isinstance(input_data, list), f"Expected events to be a list, got {type(input_data)} for path {events_path}"
 
         # Parse data
-        is_binary = isinstance(target_values, str) or len(target_values)==1
+        is_binary = (isinstance(target_values, str) or len(target_values)==1) and (value_function is None)
         for element in input_data:
             if element[event_key] in target_values:
-                value = 1 if is_binary else element[event_key]
                 ts = parse_timestamp(element[ts_key], start_time) if ts_is_datetime else start_time + timedelta(seconds=float(element[ts_key])*ts_sampling)
-                data[ts] = value
+                data[ts] = cls._get_xml_value(element, event_key, 1, value_function)
                 if duration_key is not None:
                     ts = ts + timedelta(seconds=float(element[duration_key])*ts_sampling)
-                    data[ts] = 0 if is_binary else element[event_key]
+                    data[ts] = cls._get_xml_value(element, event_key, start_value, None)
         is_spikes = is_binary and (duration_key is None) and (len(data) >= 1)
         return cls(label=label, start_time=t0, data=data, is_binary=is_binary, is_spikes=is_spikes, start_value=start_value)
+
                 
     @classmethod
     def from_wfdb_annotation(cls, record_filepath:str, label:str, target_values:Union[str,list], t0:datetime, start_value:Any=None, extension:str='ann', openclose:Tuple=None):
@@ -1408,7 +1425,7 @@ class EventFrame(DataHolder):
         return output
 
     @classmethod
-    def from_xml(cls, record_filepath:str, event_key:str, target_values:dict, ts_key:str, t0:datetime, start_value:Any=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
+    def from_xml(cls, record_filepath:str, event_key:str, target_values:dict, ts_key:str, t0:datetime, start_value:Any=None, value_function:Callable=None, duration_key:str=None, events_path:list=[], ts_is_datetime:bool=True, ts_sampling:float=1.0):
         """Instantiate an EventFrame from an XML annotation file (e.g. NSRR datasets).
         The XML file is assumed to have a list of events at a certain depth level.
         Each item in target_values will be treated separately so that the EventFrame will have an EventRecord for each key.
@@ -1421,6 +1438,7 @@ class EventFrame(DataHolder):
             ts_key (str): Which XML tag is associated to the timing of the event
             t0 (datetime): Initial timestamp
             start_value (Any, optional): Initial value of the record. Defaults to None.
+            value_function (Callable, optional): Set values according to elements in the data. Defaults to None (values are explicit from event_key)
             duration_key (str, optional): Which XML tag is associated to the timing of the event. Defaults to None -> spikes for binary events, automatically embedded for other events (e.g. sleep stages).
             events_path (list, optional): How to reach the right depth in the XML. Defaults to [] -> root of the document.
             ts_is_datetime (bool, optional): Flag if the ts column is absolute timestamps, or an increasing value from t0. Defaults to True.
@@ -1432,7 +1450,7 @@ class EventFrame(DataHolder):
         start_date = t0
         output = cls(start_date=start_date)
         for key, val in target_values.items():
-            output[key] = EventRecord.from_xml(record_filepath, key, event_key, val, ts_key, t0, start_value, duration_key, events_path, ts_is_datetime, ts_sampling)
+            output[key] = EventRecord.from_xml(record_filepath, key, event_key, val, ts_key, t0, start_value, value_function, duration_key, events_path, ts_is_datetime, ts_sampling)
         return output
 
     @classmethod
