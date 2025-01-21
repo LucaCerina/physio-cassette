@@ -1135,10 +1135,11 @@ class EventRecord:
 
         # Parse data
         is_binary = (isinstance(target_values, str) or len(target_values)==1) and (value_function is None)
+        binary_set_value = 1 if is_binary else None
         for element in input_data:
             if element[event_key] in target_values:
                 ts = parse_timestamp(element[ts_key], start_time) if ts_is_datetime else start_time + timedelta(seconds=float(element[ts_key])*ts_sampling)
-                data[ts] = cls._get_xml_value(element, event_key, 1, value_function)
+                data[ts] = cls._get_xml_value(element, event_key, binary_set_value, value_function)
                 if duration_key is not None:
                     ts = ts + timedelta(seconds=float(element[duration_key])*ts_sampling)
                     data[ts] = cls._get_xml_value(element, event_key, start_value, None)
