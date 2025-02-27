@@ -1525,11 +1525,13 @@ class EventFrame(DataHolder):
 
         return output
 
-def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='pickle', force:bool=False) -> Any:
+def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='pickle', force:bool=False, ignore_kwargs:List[str]=None) -> Any:
     """Minimal wrapper to automatically manage cache of functions. Currently support pickle and matlab formats.
        BEWARE! Not all data formats may be supported correctly.
        Example call --> autocache(foo, 'test', 'test')(args)
        Cached call is tested against existence of cache file and hashing of source + passed arguments (not cached)
+       Ignore_kwargs can be used to ignore certain keyword arguments that are passed to the argument. 
+       An example is argument that may change at every call, but are not affecting the output result
 
     Args:
         func (Callable): function to be called.
@@ -1537,6 +1539,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         filename (str): filename of the cached data.
         cache_format (str, optional): Select which serialization format is used. Currently support 'pickle' and 'matlab'. Defaults to 'pickle'.
         force (bool, optional): Force the function to be executed even if cache exists. Defaults to False.
+        ignore_kwargs (List[str], optional): Ignore certain keyword arguments. Defaults to None
         (args) Arguments of the function to be called
 
     Returns:
@@ -1571,7 +1574,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         return f"{module_name}({module_version}).{func_name}"
     
     # Code hasher
-    def hash(source:str, vars_data:dict, args_data:Any, kwargs_data:Any) -> str:
+    def hash(source:str, vars_data:dict, args_data:Any, kwargs_data:Any, ignore_kwargs:List[str]=None) -> str:
         """Hash function and arguments to check if they changed from cached version
 
         Args:
@@ -1579,6 +1582,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
             vars_data (dict): variables of the class (e.g. __init__ variables not passed to caller)
             args_data (Any): positional arguments
             kwargs_data (Any): keyword arguments
+            ignore_kwargs (List[str], optional): Optional list of keyword arguments to be ignored. See docs above.
 
         Returns:
             str: hash result
@@ -1587,7 +1591,10 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
         hasher.update(source.encode('utf-8'))
         hasher.update(str([k+v.__repr__() for k,v in vars_data.items()]).encode('utf-8'))
         hasher.update(str([x.__repr__() for x in args_data]).encode('utf-8'))
-        hasher.update(str(kwargs_data).encode('utf-8'))
+        if ignore_kwargs is None:
+            hasher.update(str(kwargs_data).encode('utf-8'))
+        else:
+            hasher.update(str({k:v for k,v in kwargs_data.items() if k not in ignore_kwargs}).encode('utf-8'))
         return hasher.hexdigest()
 
     # Function wrapper
@@ -1603,7 +1610,7 @@ def autocache(func:Callable, cache_folder:str, filename:str, cache_format:str='p
             cls = getattr(importlib.import_module(func.__module__), func.__class__.__name__)
             source = inspect.getsource(cls)
         vars_data = func.__dict__ if hasattr(func, '__dict__') else {}
-        hashed_call = hash(source, vars_data, args, kwargs) 
+        hashed_call = hash(source, vars_data, args, kwargs, ignore_kwargs) 
         # Check if folder exists or create it
         if not Path(cache_folder).exists():
             os.makedirs(cache_folder, exist_ok=True)
