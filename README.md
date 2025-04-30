@@ -1,4 +1,5 @@
 # Physio Cassette: Storage structures for signals, metadata and event annotations
+**ARCHIVED to deter GitHub tracking and profiteering! Now available at https://codeberg.org/LucaCerina/physio-cassette**
 Managing signals in physiology and associated metadata can be a pain.
 
 You want abstraction, but not much from any underlying Numpy array holding them.

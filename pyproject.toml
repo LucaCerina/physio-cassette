@@ -32,8 +32,8 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://github.com/LucaCerina/physio-cassette"
-"Bug Tracker" = "https://github.com/LucaCerina/physio-cassette/issues"
+homepage = "https://codeberg.org/LucaCerina/physio-cassette"
+"Bug Tracker" = "https://codeberg.org/LucaCerina/physio-cassette/issues"
 
 [metadata]
 author = "LucaCerina"
